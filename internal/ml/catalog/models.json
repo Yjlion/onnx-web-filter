@@ -59,7 +59,7 @@
       {"role": "tokenizer", "path": "tokenizer.json", "size": 711494, "sha256": "435667fab0c06c165b1283ecb422497c37124f2d6a35b2ac73dc876332fc9518"}
     ],
     "text": {
-      "max_len": 512,
+      "max_len": 256,
       "inputs": ["input_ids", "attention_mask"],
       "output": "logits",
       "softmax": true

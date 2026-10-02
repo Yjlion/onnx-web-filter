@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"math"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -275,6 +276,63 @@ func benchImage(b *testing.B, id string) {
 	b.ResetTimer()
 	for b.Loop() {
 		if _, err := c.Classify(context.Background(), data); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestTextModelMatchesReference(t *testing.T) {
+	fx := loadFixtures(t)
+	m, inst := installed(t, "distilbert-nsfw")
+	c, err := NewTextClassifier(m, inst, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if len(fx.Texts) == 0 {
+		t.Fatal("no text fixtures")
+	}
+	for _, f := range fx.Texts {
+		got, err := c.Classify(context.Background(), f.Text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d := maxDiff(got.Probs, f.Probs); d > 1e-4 {
+			t.Errorf("%.40q: probs %v, reference %v", f.Text, got.Probs, f.Probs)
+		}
+		// The weighted score is p(nsfw) for this two-label model.
+		if math.Abs(got.Unsafe-f.Probs[1]) > 1e-4 {
+			t.Errorf("unsafe %.4f, want %.4f", got.Unsafe, f.Probs[1])
+		}
+	}
+}
+
+func TestTextLongAndEmpty(t *testing.T) {
+	m, inst := installed(t, "distilbert-nsfw")
+	c, err := NewTextClassifier(m, inst, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	long := strings.Repeat("The museum opens a new exhibition about medieval farming tools. ", 400)
+	if _, err := c.Classify(context.Background(), long); err != nil {
+		t.Fatalf("long text: %v", err)
+	}
+	if _, err := c.Classify(context.Background(), ""); err != nil {
+		t.Fatalf("empty text: %v", err)
+	}
+}
+
+func BenchmarkTextPage(b *testing.B) {
+	m, inst := installed(b, "distilbert-nsfw")
+	c, err := NewTextClassifier(m, inst, Options{})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer c.Close()
+	page := strings.Repeat("The museum opens a new exhibition about medieval farming tools. ", 60)
+	for b.Loop() {
+		if _, err := c.Classify(context.Background(), page); err != nil {
 			b.Fatal(err)
 		}
 	}
