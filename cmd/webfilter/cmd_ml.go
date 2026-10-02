@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
+	"github.com/yjlion/onnx-web-filter/internal/ml/catalog"
 	"github.com/yjlion/onnx-web-filter/internal/ml/ortenv"
 	"github.com/yjlion/onnx-web-filter/internal/ml/ortrt"
 )
@@ -72,9 +74,37 @@ func newMLCmd() *cobra.Command {
 		return nil
 	}
 
-	download := &cobra.Command{Use: "download", Short: "Download the ONNX Runtime " + ortrt.PinnedVersion + " build for this machine"}
+	models := &cobra.Command{Use: "models", Short: "List the model catalog"}
+	mf := addMLFlags(models)
+	models.RunE = func(cmd *cobra.Command, args []string) error {
+		tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw, "ID\tTASK\tSIZE\tDEFAULT\tINSTALLED\tLICENSE\tNAME")
+		for _, m := range catalog.All() {
+			_, inst := catalog.LoadInstalled(mf.dataDir, m)
+			fmt.Fprintf(tw, "%s\t%s\t%d MB\t%v\t%v\t%s\t%s\n", m.ID, m.Task, m.SizeBytes()>>20, m.Default, inst, m.License, m.Name)
+		}
+		return tw.Flush()
+	}
+
+	download := &cobra.Command{
+		Use:   "download [model-id...]",
+		Short: "Download the ONNX Runtime " + ortrt.PinnedVersion + " build for this machine and models (default: one per task)",
+	}
 	df := addMLFlags(download)
 	download.RunE = func(cmd *cobra.Command, args []string) error {
+		var want []catalog.Model
+		for _, id := range args {
+			m, ok := catalog.Lookup(id)
+			if !ok {
+				return fmt.Errorf("unknown model %q; see `webfilter ml models`", id)
+			}
+			want = append(want, m)
+		}
+		if len(want) == 0 {
+			for _, t := range []catalog.Task{catalog.TaskImage, catalog.TaskText, catalog.TaskSite} {
+				want = append(want, catalog.Default(t))
+			}
+		}
 		accel := ortrt.ResolveAccel(df.accel)
 		if _, ok := ortrt.AssetFor(ortrt.PinnedVersion, runtime.GOOS, runtime.GOARCH, accel); !ok && accel.GPU() {
 			fmt.Printf("no %s build for %s/%s; using the CPU build\n", accel, runtime.GOOS, runtime.GOARCH)
@@ -85,9 +115,22 @@ func newMLCmd() *cobra.Command {
 			return err
 		}
 		fmt.Printf("installed %s\n  %s\n", inst.Asset, inst.Library)
+
+		hub := catalog.NewHub()
+		for _, m := range want {
+			if _, ok := catalog.LoadInstalled(df.dataDir, m); ok {
+				fmt.Printf("%s: already installed\n", m.ID)
+				continue
+			}
+			fmt.Printf("%s: downloading %d MB from %s\n", m.ID, m.SizeBytes()>>20, m.Repo)
+			if _, err := hub.Download(cmd.Context(), df.dataDir, m, nil); err != nil {
+				return err
+			}
+			fmt.Printf("%s: installed\n", m.ID)
+		}
 		return nil
 	}
 
-	root.AddCommand(status, download)
+	root.AddCommand(status, models, download)
 	return root
 }
