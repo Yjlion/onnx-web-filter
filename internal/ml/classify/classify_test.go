@@ -337,3 +337,48 @@ func BenchmarkTextPage(b *testing.B) {
 		}
 	}
 }
+
+func TestEmbedderMatchesReference(t *testing.T) {
+	fx := loadFixtures(t)
+	m, inst := installed(t, "minilm-l6")
+	e, err := NewEmbedder(m, inst, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	var texts []string
+	for _, f := range fx.Embeds {
+		texts = append(texts, f.Text)
+	}
+	if len(texts) == 0 {
+		t.Fatal("no embedding fixtures")
+	}
+	// The int8 model quantizes activations with one scale per tensor, so
+	// a text's vector depends slightly on its batch-mates: compare single
+	// runs exactly and a batch loosely.
+	batch, err := e.Embed(context.Background(), texts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vecs := make([][]float32, len(texts))
+	for i, f := range fx.Embeds {
+		v, err := e.Embed(context.Background(), []string{f.Text})
+		if err != nil {
+			t.Fatal(err)
+		}
+		vecs[i] = v[0]
+		got := make([]float64, len(v[0]))
+		for d, x := range v[0] {
+			got[d] = float64(x)
+		}
+		if d := maxDiff(got, f.Vector); d > 1e-4 {
+			t.Errorf("%q: max component diff %.6f", f.Text, d)
+		}
+		if c := dot(batch[i], v[0]); c < 0.99 {
+			t.Errorf("%q: batched vs single cosine %.4f", f.Text, c)
+		}
+		if n := dot(vecs[i], vecs[i]); math.Abs(n-1) > 1e-4 {
+			t.Errorf("%q: not normalised (|v|²=%.5f)", f.Text, n)
+		}
+	}
+}
