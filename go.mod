@@ -13,6 +13,7 @@ require (
 	golang.org/x/image v0.44.0
 	golang.org/x/net v0.56.0
 	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.40.0
 	modernc.org/sqlite v1.53.0
 )
 
