@@ -30,26 +30,22 @@
     "normalize_accept_encoding": true,
     "trust_client_ip_header": true
   },
-  "llm": {
+  "ml": {
     "enabled": true,
-    "data_dir": "./data/llm",
-    "model": "gemma-4-e2b",
+    "data_dir": "./data/ml",
     "accel": "auto",
+    "ort_lib_path": "",
+    "image_model": "",
+    "text_model": "",
+    "site_model": "",
     "threads": 0,
-    "gpu_layers": 99,
-    "parallel_slots": 0,
-    "context_size": 4096,
+    "parallel": 0,
     "max_image_px": 384,
-    "image_max_tokens": 0,
-    "port": 0,
-    "external_url": "",
-    "extra_args": [],
+    "adult_score": 0.9,
     "budget": {
-      "image_ms": 1500,
-      "text_ms": 2000,
-      "host_ms": 500,
-      "category_ms": 1500,
-      "compile_ms": 180000
+      "image_ms": 500,
+      "text_ms": 500,
+      "category_ms": 500
     }
   },
   "adblock_dir": "./data/adblock",

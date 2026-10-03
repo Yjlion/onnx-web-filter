@@ -21,7 +21,7 @@ import (
 // registerToolsRoutes wires the diagnostic /api/tools/* endpoints that back
 // the Tools page and the policy editor's "scan network" MAC picker:
 //
-//	POST /api/tools/scan       — NSFW scan of a URL, using the same LLM
+//	POST /api/tools/scan       — NSFW scan of a URL, using the same
 //	                             classification backend as the proxy pipeline.
 //	POST /api/tools/youtube    — parse a YouTube URL + fetch oEmbed metadata.
 //	POST /api/tools/doh        — query a DoH resolver and report block status.
@@ -62,7 +62,7 @@ const (
 )
 
 // handleToolsScan fetches a URL and classifies it with the same backend the
-// proxy pipeline uses (Server.Scanner, the LLM verdict service), behind
+// proxy pipeline uses (Server.Scanner, the verdict service), behind
 // addons.KeywordScore's pre-filter for page text. A nil Scanner reports the
 // scan as an error rather than silently calling everything clean.
 //

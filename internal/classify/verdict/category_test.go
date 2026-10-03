@@ -28,7 +28,7 @@ func TestCategoryListsThenCacheThenModel(t *testing.T) {
 
 	// The model answers within the budget and is cached per site.
 	a = s.Category(ctx, CategoryRequest{Host: "www.store.example", Enqueue: true, Budget: time.Second})
-	if !a.Known || a.Category != "shopping" || a.Source != SourceLLM {
+	if !a.Known || a.Category != "shopping" || a.Source != SourceModel {
 		t.Fatalf("model answer = %+v", a)
 	}
 	a = s.Category(ctx, CategoryRequest{Host: "m.store.example"})
@@ -102,7 +102,7 @@ func TestStoreMigratesOldSchema(t *testing.T) {
 	if d, ok := st.Get(KindHost, "ads.example"); !ok || !d.Adult {
 		t.Fatalf("old row lost: %+v %v", d, ok)
 	}
-	if err := st.Put(Decision{Kind: KindCategory, Key: "news.example", Category: "news", Source: SourceLLM}); err != nil {
+	if err := st.Put(Decision{Kind: KindCategory, Key: "news.example", Category: "news", Source: SourceModel}); err != nil {
 		t.Fatal(err)
 	}
 	st.lru.purge()

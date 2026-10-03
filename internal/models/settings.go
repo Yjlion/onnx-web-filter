@@ -77,8 +77,8 @@ type GlobalSettings struct {
 
 	Icap IcapConfig `json:"icap"`
 
-	// LLM configures the local edge model runtime; see LLMConfig.
-	LLM LLMConfig `json:"llm"`
+	// ML configures content classification with ONNX Runtime; see MLConfig.
+	ML MLConfig `json:"ml"`
 
 	// AdBlockDir holds downloaded filter lists (EasyList, EasyPrivacy).
 	// Empty means <project root>/data/adblock; when no lists have been
@@ -202,7 +202,7 @@ func NewGlobalSettings() GlobalSettings {
 		PacDirectIPs:     []string{},
 		MgmtHostname:     "web.filter",
 		Icap:             NewIcapConfig(),
-		LLM:              NewLLMConfig(),
+		ML:               NewMLConfig(),
 		AdBlockSources:   []AdBlockSource{},
 	}
 }

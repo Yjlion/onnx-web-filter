@@ -5,7 +5,8 @@ import "encoding/json"
 // AdBlockConfig controls ad and tracker removal for a policy: EasyList-style
 // network rules (requests to ad hosts are answered with an empty body of
 // the right type) and cosmetic rules (ad containers hidden with injected
-// CSS), with the edge LLM classifying hosts the lists do not know.
+// CSS). Hosts the lists do not know are allowed unless a manual override
+// on the Decisions page blocks them.
 type AdBlockConfig struct {
 	Enabled bool `json:"enabled"`
 	// Cosmetic injects element-hiding CSS into HTML pages. Off leaves

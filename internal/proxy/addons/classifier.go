@@ -12,7 +12,7 @@ import (
 
 // ContentClassifier is the backend the text and image classifier addons
 // ask for verdicts. In onnx-web-filter it is the verdict service in front
-// of the edge LLM (internal/classify/verdict); tests use stubs. Every call
+// of the ONNX models (internal/classify/verdict); tests use stubs. Every call
 // carries a wait budget: the backend answers from its cache instantly, or
 // waits on the model for at most that long and reports TimedOut, in which
 // case the addon applies the policy's on_timeout action.
@@ -66,36 +66,37 @@ type ImagePrefetcher interface {
 }
 
 // budgetFor resolves the wait budget for a classifier: the policy's own
-// budget_ms when set, else the global llm.budget value for the kind.
+// budget_ms when set, else the global ml.budget value for the kind. Hosts
+// have no model, so their budget is zero: the answer is whatever the cache
+// already holds (manual overrides).
 func budgetFor(fc *proxy.FlowContext, policyMs int, kind string) time.Duration {
 	if policyMs > 0 {
 		return time.Duration(policyMs) * time.Millisecond
 	}
+	if kind == "host" {
+		return 0
+	}
 	var ms int
 	if fc.Runtime != nil {
-		b := fc.Runtime.Settings().LLM.Budget
+		b := fc.Runtime.Settings().ML.Budget
 		switch kind {
 		case "image":
 			ms = b.ImageMs
 		case "text":
 			ms = b.TextMs
-		case "host":
-			ms = b.HostMs
 		case "category":
 			ms = b.CategoryMs
 		}
 	}
 	if ms <= 0 {
-		d := models.NewLLMConfig().Budget
+		d := models.NewMLConfig().Budget
 		switch kind {
 		case "image":
 			ms = d.ImageMs
 		case "text":
 			ms = d.TextMs
-		case "category":
-			ms = d.CategoryMs
 		default:
-			ms = d.HostMs
+			ms = d.CategoryMs
 		}
 	}
 	return time.Duration(ms) * time.Millisecond

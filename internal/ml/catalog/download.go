@@ -113,7 +113,8 @@ func Remove(dataDir, id string) error {
 	return os.RemoveAll(ModelDir(dataDir, id))
 }
 
-// Progress is the live state of one download, safe to read concurrently.
+// Progress is the live state of a download, safe to read concurrently. One
+// Progress can follow several models downloaded one after another.
 type Progress struct {
 	total atomic.Int64
 	done  atomic.Int64
@@ -141,8 +142,8 @@ func (p *Progress) Current() string {
 func (h *Hub) Download(ctx context.Context, dataDir string, m Model, prog *Progress) (Installed, error) {
 	if inst, ok := LoadInstalled(dataDir, m); ok {
 		if prog != nil {
-			prog.total.Store(m.SizeBytes())
-			prog.done.Store(m.SizeBytes())
+			prog.total.Add(m.SizeBytes())
+			prog.done.Add(m.SizeBytes())
 		}
 		return inst, nil
 	}
@@ -151,7 +152,7 @@ func (h *Hub) Download(ctx context.Context, dataDir string, m Model, prog *Progr
 		return Installed{}, err
 	}
 	if prog != nil {
-		prog.total.Store(m.SizeBytes())
+		prog.total.Add(m.SizeBytes())
 	}
 	for _, f := range m.Files {
 		if prog != nil {

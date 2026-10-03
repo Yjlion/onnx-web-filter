@@ -26,7 +26,7 @@ type VideoClassifierConfig struct {
 
 func NewVideoClassifierConfig() VideoClassifierConfig {
 	return VideoClassifierConfig{
-		Threshold:   0.4,
+		Threshold:   0.75,
 		OnTimeout:   FallbackAllow,
 		YouTube:     true,
 		Exclude:     []string{},

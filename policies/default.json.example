@@ -19,7 +19,7 @@
   "image_classifier": {
     "enabled": false,
     "action": "blur",
-    "threshold": 0.4,
+    "threshold": 0.75,
     "exclude": [],
     "include_only": [],
     "min_dimension": 100,
@@ -73,7 +73,7 @@
   },
   "video_classifier": {
     "enabled": false,
-    "threshold": 0.4,
+    "threshold": 0.75,
     "on_timeout": "allow",
     "keyframes": false,
     "youtube": true,

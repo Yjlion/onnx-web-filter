@@ -7,14 +7,16 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/yjlion/onnx-web-filter/internal/classify/imageprep"
 	"github.com/yjlion/onnx-web-filter/internal/classify/verdict"
-	"github.com/yjlion/onnx-web-filter/internal/llm"
-	"github.com/yjlion/onnx-web-filter/internal/llm/catalog"
 	"github.com/yjlion/onnx-web-filter/internal/mgmtapi"
+	"github.com/yjlion/onnx-web-filter/internal/ml"
+	"github.com/yjlion/onnx-web-filter/internal/ml/catalog"
+	"github.com/yjlion/onnx-web-filter/internal/ml/classify"
 	"github.com/yjlion/onnx-web-filter/internal/models"
 	"github.com/yjlion/onnx-web-filter/internal/proxy"
 	"github.com/yjlion/onnx-web-filter/internal/proxy/addons"
@@ -22,30 +24,30 @@ import (
 	"github.com/yjlion/onnx-web-filter/internal/sitecat"
 )
 
-// LLMStack is everything the LLM contributes to a running process: the
-// service that owns llama-server, the verdict service that caches and
-// queues decisions in front of it, and the adapters the pipeline and the
-// management API talk to.
-type LLMStack struct {
-	Svc      *llm.Service
+// MLStack is everything classification contributes to a running process:
+// the service that owns the ONNX models, the verdict service that caches
+// and queues decisions in front of it, and the adapters the pipeline and
+// the management API talk to.
+type MLStack struct {
+	Svc      *ml.Service
 	Verdicts *verdict.Service
 	Store    *verdict.Store
 	Prefetch *verdict.Prefetcher
-	adapter  *llmBackend
+	maxPx    int
 }
 
-// NewLLMStack builds and starts the stack for settings. It never fails the
-// caller: a runtime that cannot start is reported on the LLM page and the
+// NewMLStack builds and starts the stack for settings. It never fails the
+// caller: models that cannot load are reported on the Models page and the
 // proxy runs with classification unavailable (the configured
 // on_unavailable actions apply).
-func NewLLMStack(ctx context.Context, cfg models.LLMConfig) *LLMStack {
-	svc := llm.New(cfg)
+func NewMLStack(ctx context.Context, cfg models.MLConfig) *MLStack {
+	svc := ml.New(cfg)
 	if !cfg.Enabled {
-		slog.Info("llm: disabled in settings; content classification unavailable")
+		slog.Info("ml: disabled in settings; content classification unavailable")
 	} else if err := svc.Start(ctx); err != nil {
-		slog.Error("llm: start failed; content classification unavailable until fixed", "err", err)
-	} else if rt, m := svc.Missing(); (rt || m) && cfg.ExternalURL == "" {
-		slog.Warn("llm: runtime or model not installed; run `webfilter llm download` or use the LLM page", "runtime_missing", rt, "model_missing", m)
+		slog.Error("ml: models failed to load; content classification unavailable until fixed", "err", err)
+	} else if rt, missing := svc.Missing(); rt || len(missing) > 0 {
+		slog.Warn("ml: runtime or models not installed; run `webfilter ml download` or use the Models page", "runtime_missing", rt, "models_missing", missing)
 	}
 
 	dbPath := ":memory:"
@@ -57,119 +59,103 @@ func NewLLMStack(ctx context.Context, cfg models.LLMConfig) *LLMStack {
 		slog.Error("verdict: cannot open decision cache, using memory", "err", err, "path", dbPath)
 		store, _ = verdict.OpenMemory()
 	}
-	backend := &llmBackend{svc: svc, maxPx: cfg.MaxImagePx}
+	backend := &onnxBackend{svc: svc, adultScore: cfg.AdultScore}
 	vs := verdict.New(store, backend, verdict.Options{
 		Workers:    svc.Slots(),
 		QueueLimit: 64 * svc.Slots(),
 		MaxImagePx: cfg.MaxImagePx,
 	})
 	pre := verdict.NewPrefetcher(vs, &http.Client{Transport: proxy.NewTransport(), Timeout: 20 * time.Second}, 2)
-	return &LLMStack{Svc: svc, Verdicts: vs, Store: store, Prefetch: pre, adapter: backend}
+	return &MLStack{Svc: svc, Verdicts: vs, Store: store, Prefetch: pre, maxPx: cfg.MaxImagePx}
 }
 
-// Close stops the model and the verdict workers.
-func (st *LLMStack) Close() {
+// Close stops the verdict workers and the models.
+func (st *MLStack) Close() {
 	st.Verdicts.Close()
 	st.Svc.Stop()
 	_ = st.Store.Close()
 }
 
 // PipelineClassifiers is what BuildProxyEngine wires into the addons.
-func (st *LLMStack) PipelineClassifiers() Classifiers {
+func (st *MLStack) PipelineClassifiers() Classifiers {
 	return Classifiers{Classifier: &pipelineClassifier{vs: st.Verdicts}, Prefetcher: st.Prefetch, Fetcher: st.Prefetch, Sites: st.Verdicts}
 }
 
 // Scanner is the management API's content scanner.
-func (st *LLMStack) Scanner() mgmtapi.ContentScanner { return &scanner{st: st} }
+func (st *MLStack) Scanner() mgmtapi.ContentScanner { return &scanner{st: st} }
 
-// Controller is the management API's LLM controller.
-func (st *LLMStack) Controller() mgmtapi.LLMController {
+// Controller is the management API's model controller.
+func (st *MLStack) Controller() mgmtapi.MLController {
 	return &controller{svc: st.Svc, vs: st.Verdicts}
 }
 
 // Decisions is the management API's decision-cache view.
-func (st *LLMStack) Decisions() mgmtapi.DecisionStore { return &decisions{vs: st.Verdicts} }
+func (st *MLStack) Decisions() mgmtapi.DecisionStore { return &decisions{vs: st.Verdicts} }
 
-// ---- verdict.Backend over llm.Service ----
+// ---- verdict.Backend over ml.Service ----
 
-type llmBackend struct {
-	svc   *llm.Service
-	maxPx int
+type onnxBackend struct {
+	svc        *ml.Service
+	adultScore float64
 }
 
-func (b *llmBackend) Ready() bool     { return b.svc.Ready() }
-func (b *llmBackend) ModelID() string { return b.svc.Model().ID }
-func (b *llmBackend) Vision() bool    { return b.svc.Model().Vision }
+func (b *onnxBackend) Ready() bool     { return b.svc.Ready() }
+func (b *onnxBackend) ModelID() string { return b.svc.ModelIDs() }
+func (b *onnxBackend) Vision() bool    { return true }
 
-// ErrLLMNotReady is returned while the model is down.
-var ErrLLMNotReady = errors.New("LLM is not ready")
+// Hosts is false: no model judges ad/tracker hosts, EasyList does.
+func (b *onnxBackend) Hosts() bool { return false }
 
-func (b *llmBackend) Image(ctx context.Context, mime string, data []byte, hint string) (verdict.Result, error) {
-	cli := b.svc.Client()
-	if cli == nil {
-		return verdict.Result{}, ErrLLMNotReady
-	}
-	started := time.Now()
-	v, _, err := cli.ClassifyImage(ctx, mime, data, hint)
-	llm.Observe("image", started, err)
+func (b *onnxBackend) Image(ctx context.Context, mime string, data []byte, hint string) (verdict.Result, error) {
+	sc, err := b.svc.Image(ctx, data)
 	if err != nil {
 		return verdict.Result{}, err
 	}
-	detail := v.Description
-	if v.IsAd {
-		detail = "[ad] " + detail
-	}
-	return verdict.Result{Score: v.Score(), Adult: v.Adult || v.Nudity >= 2, Confidence: v.Confidence, Detail: detail}, nil
+	_, top := sc.Top()
+	return verdict.Result{Score: sc.Unsafe, Adult: sc.Unsafe >= b.adultScore, Confidence: top, Detail: describe(sc)}, nil
 }
 
-func (b *llmBackend) Text(ctx context.Context, url, title, text string) (verdict.Result, error) {
-	cli := b.svc.Client()
-	if cli == nil {
-		return verdict.Result{}, ErrLLMNotReady
+func (b *onnxBackend) Text(ctx context.Context, url, title, text string) (verdict.Result, error) {
+	in := text
+	if t := strings.TrimSpace(title); t != "" {
+		in = t + ". " + text
 	}
-	started := time.Now()
-	v, _, err := cli.ClassifyText(ctx, url, title, text)
-	llm.Observe("text", started, err)
+	sc, err := b.svc.Text(ctx, in)
 	if err != nil {
 		return verdict.Result{}, err
 	}
-	detail := v.Reason
-	if len(v.Categories) > 0 {
-		detail = strings.Join(v.Categories, ",") + ": " + detail
-	}
-	return verdict.Result{Score: v.Score(), Adult: v.Adult, Confidence: v.Confidence, Detail: detail}, nil
+	_, top := sc.Top()
+	return verdict.Result{Score: sc.Unsafe, Adult: sc.Unsafe >= b.adultScore, Confidence: top, Detail: describe(sc)}, nil
 }
 
-func (b *llmBackend) Host(ctx context.Context, host string, samplePaths []string) (verdict.Result, error) {
-	cli := b.svc.Client()
-	if cli == nil {
-		return verdict.Result{}, ErrLLMNotReady
-	}
-	started := time.Now()
-	v, _, err := cli.ClassifyHost(ctx, host, samplePaths)
-	llm.Observe("host", started, err)
+func (b *onnxBackend) Host(ctx context.Context, host string, samplePaths []string) (verdict.Result, error) {
+	return verdict.Result{}, errors.New("hosts are not classified by a model")
+}
+
+func (b *onnxBackend) Site(ctx context.Context, host, title, description string) (verdict.Result, error) {
+	sc, err := b.svc.Site(ctx, host, title, description)
 	if err != nil {
 		return verdict.Result{}, err
 	}
-	score := v.Confidence
-	if !v.IsAdOrTracker {
-		score = 1 - v.Confidence
+	var parts []string
+	for _, r := range sc.Ranked[:min(3, len(sc.Ranked))] {
+		parts = append(parts, fmt.Sprintf("%s %.2f", r.Slug, r.Probability))
 	}
-	return verdict.Result{Score: score, Adult: v.IsAdOrTracker, Confidence: v.Confidence, Detail: v.Category}, nil
+	return verdict.Result{Category: sc.Category, Confidence: sc.Confidence, Detail: strings.Join(parts, ", ")}, nil
 }
 
-func (b *llmBackend) Site(ctx context.Context, host, title, description string) (verdict.Result, error) {
-	cli := b.svc.Client()
-	if cli == nil {
-		return verdict.Result{}, ErrLLMNotReady
+// describe lists the most probable labels, e.g. "porn 0.82, sexy 0.10".
+func describe(sc classify.Scores) string {
+	idx := make([]int, len(sc.Probs))
+	for i := range idx {
+		idx[i] = i
 	}
-	started := time.Now()
-	v, _, err := cli.ClassifySite(ctx, host, title, description)
-	llm.Observe("category", started, err)
-	if err != nil {
-		return verdict.Result{}, err
+	sort.Slice(idx, func(a, b int) bool { return sc.Probs[idx[a]] > sc.Probs[idx[b]] })
+	var parts []string
+	for _, i := range idx[:min(3, len(idx))] {
+		parts = append(parts, fmt.Sprintf("%s %.2f", sc.Labels[i], sc.Probs[i]))
 	}
-	return verdict.Result{Category: v.Category, Confidence: v.Confidence}, nil
+	return strings.Join(parts, ", ")
 }
 
 // ---- state.SiteCategorizer over verdict.Service ----
@@ -218,71 +204,82 @@ func (c *pipelineClassifier) ClassifyHost(ctx context.Context, req addons.HostRe
 
 // ---- mgmtapi.ContentScanner (Tools page) ----
 
-type scanner struct{ st *LLMStack }
+// ErrMLNotReady is returned by the scanner while the models are down.
+var ErrMLNotReady = errors.New("classification models are not loaded")
+
+type scanner struct{ st *MLStack }
 
 func (s *scanner) ScanText(ctx context.Context, text string) (mgmtapi.TextScan, error) {
 	if !s.st.Svc.Ready() {
-		return mgmtapi.TextScan{}, ErrLLMNotReady
+		return mgmtapi.TextScan{}, ErrMLNotReady
 	}
 	a := s.st.Verdicts.Text(ctx, verdict.TextRequest{URL: "", Title: "", Text: text, Budget: 60 * time.Second})
 	if !a.Known {
 		return mgmtapi.TextScan{}, fmt.Errorf("no verdict: %s", a.Detail)
 	}
-	return mgmtapi.TextScan{Adult: a.Adult, Score: a.Score, Categories: splitDetail(a.Detail), Source: string(a.Source)}, nil
+	return mgmtapi.TextScan{Adult: a.Adult, Score: a.Score, Categories: labelsOf(a.Detail), Source: string(a.Source)}, nil
 }
 
-func splitDetail(d string) []string {
-	cats, _, ok := strings.Cut(d, ": ")
-	if !ok {
-		return nil
+// labelsOf turns describe's "porn 0.82, sexy 0.10" back into labels.
+func labelsOf(detail string) []string {
+	var out []string
+	for _, part := range strings.Split(detail, ", ") {
+		if label, _, ok := strings.Cut(part, " "); ok {
+			out = append(out, label)
+		}
 	}
-	return strings.Split(cats, ",")
+	return out
 }
 
 func (s *scanner) ScanImage(ctx context.Context, img []byte) (mgmtapi.ImageScan, error) {
 	if !s.st.Svc.Ready() {
-		return mgmtapi.ImageScan{}, ErrLLMNotReady
+		return mgmtapi.ImageScan{}, ErrMLNotReady
 	}
-	if !s.st.Svc.Model().Vision {
-		return mgmtapi.ImageScan{}, fmt.Errorf("model %s has no vision support", s.st.Svc.Model().ID)
+	if _, err := imageprep.Prepare(img, s.st.maxPx); err != nil {
+		return mgmtapi.ImageScan{}, err
 	}
-	if _, err := imageprep.Prepare(img, s.st.adapter.maxPx); err != nil {
+	// The Tools page wants every class, so score directly; the verdict
+	// cache keeps only the summary.
+	sc, err := s.st.Svc.Image(ctx, img)
+	if err != nil {
 		return mgmtapi.ImageScan{}, err
 	}
 	a := s.st.Verdicts.Image(ctx, verdict.ImageRequest{URL: "tools-scan", Data: img, Budget: 60 * time.Second})
+	out := mgmtapi.ImageScan{Adult: a.Adult, Score: a.Score, Source: string(a.Source)}
 	if !a.Known {
-		return mgmtapi.ImageScan{}, fmt.Errorf("no verdict: %s", a.Detail)
+		out.Score, out.Source = sc.Unsafe, string(verdict.SourceModel)
 	}
-	return mgmtapi.ImageScan{
-		Adult: a.Adult, Score: a.Score, Source: string(a.Source),
-		Detections: []map[string]any{
-			{"class": "adult", "score": a.Score},
-			{"class": "description", "text": a.Detail},
-		},
-	}, nil
+	for i, l := range sc.Labels {
+		out.Detections = append(out.Detections, map[string]any{"class": l, "score": sc.Probs[i]})
+	}
+	return out, nil
 }
 
 func (s *scanner) Health(ctx context.Context) mgmtapi.ScannerHealth {
 	st := s.st.Svc.Status()
-	h := mgmtapi.ScannerHealth{Model: st.Model, Status: string(st.Phase), Detail: st.LastError}
-	h.Available = st.Phase == llm.PhaseReady
+	var ids []string
+	for _, m := range st.Models {
+		ids = append(ids, m.ID)
+	}
+	h := mgmtapi.ScannerHealth{Model: strings.Join(ids, ", "), Status: string(st.Phase), Detail: st.LastError}
+	h.Available = st.Phase == ml.PhaseReady
 	if h.Available && h.Detail == "" {
-		h.Detail = "model loaded and answering"
+		h.Detail = "models loaded and answering"
 	}
 	return h
 }
 
-// ---- mgmtapi.LLMController ----
+// ---- mgmtapi.MLController ----
 
 type controller struct {
-	svc *llm.Service
+	svc *ml.Service
 	vs  *verdict.Service
 }
 
 func (c *controller) Status() any {
 	st := c.svc.Status()
 	return struct {
-		llm.Status
+		ml.Status
 		QueueDepth int           `json:"queue_depth"`
 		Cache      verdict.Stats `json:"cache"`
 	}{st, c.vs.QueueDepth(), c.vs.Store().Stats()}

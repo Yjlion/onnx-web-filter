@@ -22,7 +22,7 @@ import (
 	"github.com/yjlion/onnx-web-filter/internal/sitecat"
 )
 
-// Backend is the model behind the service. The llm package's adapter
+// Backend is the model behind the service. internal/app's ONNX adapter
 // implements it; tests use a fake.
 type Backend interface {
 	// Ready reports whether the model can answer right now.
@@ -40,6 +40,13 @@ type Backend interface {
 	// Site sorts a website into the sitecat taxonomy (Result.Category).
 	// title and description are optional page context.
 	Site(ctx context.Context, host, title, description string) (Result, error)
+}
+
+// HostCapable is implemented by a Backend that can say whether it judges
+// hosts at all. One that cannot gets no host jobs: Host answers from the
+// cache (manual overrides) or reports Unavailable at once.
+type HostCapable interface {
+	Hosts() bool
 }
 
 // Result is a backend's answer.
@@ -195,7 +202,7 @@ func (s *Service) worker() {
 		cancel()
 		metrics.VerdictJobDuration.Observe(time.Since(started).Seconds(), string(j.kind))
 		if err == nil {
-			j.answer = Decision{Kind: j.kind, Key: j.key, Score: res.Score, Adult: res.Adult, Source: SourceLLM,
+			j.answer = Decision{Kind: j.kind, Key: j.key, Score: res.Score, Adult: res.Adult, Source: SourceModel,
 				Model: s.backend.ModelID(), Detail: res.Detail, Hint: j.hint, Confidence: res.Confidence, Category: res.Category, Created: time.Now()}
 			if perr := s.store.Put(j.answer); perr != nil {
 				slog.Warn("verdict: cache write failed", "err", perr)
@@ -318,7 +325,7 @@ func (s *Service) Image(ctx context.Context, req ImageRequest) Answer {
 		res, err := s.backend.Image(ctx, prep.MIME, prep.Data, hostOf(hint))
 		if err == nil && dh != 0 {
 			s.remember(dh, exact)
-			_ = s.store.Put(Decision{Kind: KindImage, Key: "dh:" + dh.String(), Score: res.Score, Adult: res.Adult, Source: SourceLLM,
+			_ = s.store.Put(Decision{Kind: KindImage, Key: "dh:" + dh.String(), Score: res.Score, Adult: res.Adult, Source: SourceModel,
 				Model: s.backend.ModelID(), Detail: res.Detail, Hint: hint, Confidence: res.Confidence, Created: time.Now()})
 		}
 		return res, err
@@ -387,6 +394,9 @@ func (s *Service) Host(ctx context.Context, req HostRequest) Answer {
 	if d, ok := s.store.Get(KindHost, key); ok {
 		metrics.VerdictOutcomes.Inc("host", "cache")
 		return Answer{Decision: d, Known: true, Cached: true}
+	}
+	if hb, ok := s.backend.(HostCapable); ok && !hb.Hosts() {
+		return Answer{Unavailable: true}
 	}
 	if !s.backend.Ready() {
 		return Answer{Unavailable: true}

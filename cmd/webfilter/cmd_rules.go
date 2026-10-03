@@ -11,7 +11,7 @@ import (
 func newRulesCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "rules",
-		Short: "List or remove sentence rules saved by earlier versions (use `webfilter assistant` for changes)",
+		Short: "List or remove sentence rules saved by earlier versions (make new changes in the policies)",
 	}
 
 	list := &cobra.Command{Use: "list", Short: "List rules"}

@@ -13,7 +13,6 @@ import (
 	"github.com/yjlion/onnx-web-filter/internal/categories"
 	"github.com/yjlion/onnx-web-filter/internal/certs"
 	"github.com/yjlion/onnx-web-filter/internal/config"
-	"github.com/yjlion/onnx-web-filter/internal/llm/client"
 	"github.com/yjlion/onnx-web-filter/internal/logstore"
 	"github.com/yjlion/onnx-web-filter/internal/models"
 	"github.com/yjlion/onnx-web-filter/internal/policy/rules"
@@ -50,14 +49,14 @@ type Server struct {
 	OnSettingsSaved func(models.GlobalSettings)
 
 	// Scanner is the content-classification backend behind /api/tools/scan
-	// and /api/tools/classifier-health. Set by `run`, which owns the LLM
-	// verdict service; nil under standalone `mgmt` or when the LLM runtime
-	// is disabled, and both endpoints say so.
+	// and /api/tools/classifier-health. Set by `run`, which owns the models
+	// and the verdict service; nil under standalone `mgmt` or when
+	// classification is disabled, and both endpoints say so.
 	Scanner ContentScanner
 
-	// LLM drives /api/llm/*: runtime status, model downloads, restarts.
+	// ML drives /api/ml/*: runtime and model status, downloads, reloads.
 	// Set by `run`; nil under standalone `mgmt`.
-	LLM LLMController
+	ML MLController
 
 	// Decisions drives /api/decisions/*: the verdict cache viewer and
 	// override controls. Set by `run`; nil under standalone `mgmt`.
@@ -72,16 +71,9 @@ type Server struct {
 	// under standalone `mgmt`.
 	Sites state.SiteCategorizer
 
-	// Rules is rules.json next to settings.json: the named devices the
-	// assistant resolves, and sentence rules saved by earlier versions. Always set.
+	// Rules is rules.json next to settings.json: named devices and the
+	// sentence rules saved by earlier versions. Always set.
 	Rules *rules.Store
-
-	// LLMClient returns the chat client for the policy assistant, or nil
-	// when the model is not ready. Set by `run`; nil under standalone `mgmt`.
-	LLMClient func() *client.Client
-
-	// proposals holds the assistant's unapplied proposals.
-	proposals proposalCache
 
 	// ForcePlaintext makes ServeMgmt ignore mgmt_tls and serve plain HTTP.
 	// Set by the Android path (mobile/): the WebView that renders this UI has
@@ -217,14 +209,13 @@ func (s *Server) Router() *chi.Mux {
 	r.Post("/api/wireguard", s.handleWireguardStub)
 
 	s.registerOpsRoutes(r)
-	s.registerLLMRoutes(r)
+	s.registerMLRoutes(r)
 	s.registerDecisionRoutes(r)
 	s.registerRulesRoutes(r)
 	s.registerAdBlockRoutes(r)
 	s.registerCertsRoutes(r)
 	s.registerCategoriesRoutes(r)
 	s.registerSiteCategoryRoutes(r)
-	s.registerAssistantRoutes(r)
 	s.registerBackupRoutes(r)
 	s.registerToolsRoutes(r)
 	s.registerLogsExportRoute(r)

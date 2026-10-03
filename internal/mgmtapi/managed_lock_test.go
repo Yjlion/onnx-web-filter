@@ -98,9 +98,6 @@ func TestMutatingRoutesAreLockGated(t *testing.T) {
 		"POST /api/tools/youtube":         true,
 		"POST /api/tools/doh":             true,
 		"POST /api/tools/policy-simulate": true,
-		// Asking the assistant is a read: nothing is saved until
-		// POST /api/assistant/apply, which is gated.
-		"POST /api/assistant/ask": true,
 	}
 
 	s, ts := newTestServer(t)

@@ -60,20 +60,21 @@ var (
 		[]string{"classifier", "result"},
 	)
 
-	// LLMRequests counts calls to the edge model by kind (image/text/host/
-	// compile) and outcome (ok/error/timeout/unavailable).
-	LLMRequests = Default.NewCounterVec(
-		"webfilter_llm_requests_total",
-		"Edge-LLM classification calls, by kind and outcome.",
+	// MLRequests counts model inferences by kind (image/text/category) and
+	// outcome (ok/error/timeout/unavailable).
+	MLRequests = Default.NewCounterVec(
+		"webfilter_ml_requests_total",
+		"ONNX model inferences, by kind and outcome.",
 		[]string{"kind", "result"},
 	)
 
-	// LLMDuration measures wall time of one model call, by kind.
-	LLMDuration = Default.NewHistogramVec(
-		"webfilter_llm_request_duration_seconds",
-		"Wall time of one edge-LLM call, by kind.",
+	// MLDuration measures wall time of one inference, decoding and
+	// tokenizing included, by kind.
+	MLDuration = Default.NewHistogramVec(
+		"webfilter_ml_inference_duration_seconds",
+		"Wall time of one ONNX model inference, by kind.",
 		[]string{"kind"},
-		nil,
+		[]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
 	)
 
 	// VerdictOutcomes counts how each classification request was answered:

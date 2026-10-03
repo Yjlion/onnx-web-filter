@@ -1,5 +1,5 @@
 // Command webfilter is onnx-web-filter: a MITM filtering proxy whose
-// content classification is done by a local multimodal edge LLM, plus its
+// content classification is done by local ONNX models, plus its
 // management API/UI, sharing config via the filesystem (config/settings.json,
 // policies/*.json, the SQLite log DB).
 package main
@@ -31,9 +31,7 @@ func main() {
 		newSetupCmd(),
 		newProxyCmd(),
 		newMgmtCmd(),
-		newLLMCmd(),
 		newMLCmd(),
-		newAssistantCmd(),
 		newRulesCmd(),
 		newAdBlockCmd(),
 		newCategoriesCmd(),

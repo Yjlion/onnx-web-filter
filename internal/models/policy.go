@@ -61,7 +61,7 @@ type TextClassifierConfig struct {
 	OnTimeout FallbackAction `json:"on_timeout"`
 	// OnUnavailable is what happens when no model is available at all.
 	OnUnavailable FallbackAction `json:"on_unavailable"`
-	// BudgetMs overrides the global llm.budget.text_ms for this policy
+	// BudgetMs overrides the global ml.budget.text_ms for this policy
 	// (0 = use the global value).
 	BudgetMs int `json:"budget_ms"`
 }
@@ -168,7 +168,7 @@ type ImageClassifierConfig struct {
 	// OnUnavailable is applied when no model (or no vision model) is
 	// available: default "allow".
 	OnUnavailable FallbackAction `json:"on_unavailable"`
-	// BudgetMs overrides the global llm.budget.image_ms (0 = global).
+	// BudgetMs overrides the global ml.budget.image_ms (0 = global).
 	BudgetMs int `json:"budget_ms"`
 	// Prefetch scores the images a page references before the browser
 	// requests them, so they are served from cache. Default on.
@@ -178,7 +178,7 @@ type ImageClassifierConfig struct {
 func NewImageClassifierConfig() ImageClassifierConfig {
 	return ImageClassifierConfig{
 		Action:        ImageActionBlur,
-		Threshold:     0.4,
+		Threshold:     0.75,
 		MinDimension:  100,
 		Exclude:       []string{},
 		IncludeOnly:   []string{},
@@ -464,7 +464,7 @@ type CategoryFilterConfig struct {
 	OnTimeout FallbackAction `json:"on_timeout"`
 	// OnUnavailable applies when no model can answer: default "allow".
 	OnUnavailable FallbackAction `json:"on_unavailable"`
-	// BudgetMs overrides the global llm.budget.category_ms (0 = global).
+	// BudgetMs overrides the global ml.budget.category_ms (0 = global).
 	BudgetMs int `json:"budget_ms"`
 }
 

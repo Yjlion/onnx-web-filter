@@ -37,7 +37,7 @@ import (
 // text and image addons call into, and the optional image prefetcher. A
 // nil Classifier means the addons pass content through (keyword-only for
 // text). In onnx-web-filter it is the verdict service in front of the
-// edge LLM rather than embedded statistical models.
+// ONNX models (internal/ml).
 type Classifiers struct {
 	Classifier addons.ContentClassifier
 	Prefetcher addons.ImagePrefetcher

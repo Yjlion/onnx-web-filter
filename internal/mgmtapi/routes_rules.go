@@ -12,8 +12,8 @@ import (
 )
 
 // registerRulesRoutes wires what remains of the sentence-rules API. New
-// changes go through the assistant (routes_assistant.go), which edits the
-// policies themselves; rules saved by earlier versions keep being enforced
+// changes are made in the policies themselves; rules saved by earlier
+// versions (of llama-web-filter) keep being enforced
 // until they are converted or removed, so they can still be listed,
 // switched off and deleted:
 //

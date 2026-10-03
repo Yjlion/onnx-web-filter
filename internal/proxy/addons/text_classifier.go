@@ -13,7 +13,7 @@ import (
 )
 
 // TextClassifier detects adult text content via a fast keyword
-// pre-filter (always active, zero dependencies) plus the LLM verdict
+// pre-filter (always active, zero dependencies) plus the model verdict
 // stage behind ContentClassifier.
 type TextClassifier struct {
 	// Classifier is the verdict backend; nil means keyword-only.

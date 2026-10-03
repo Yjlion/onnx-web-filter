@@ -31,7 +31,7 @@ func TestEverySettingsFieldIsClassified(t *testing.T) {
 		"upstream_proxy":     true,
 		"upstream_auth":      true,
 		"disable_tray":       true,
-		"llm":                true,
+		"ml":                 true,
 		"adblock_dir":        true,
 		"adblock_sources":    true,
 	}

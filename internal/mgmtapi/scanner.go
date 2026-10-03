@@ -4,8 +4,8 @@ import "context"
 
 // ContentScanner is the content-classification backend behind the Tools
 // page's URL scanner and the classifier-health endpoint. The process that
-// owns the LLM verdict service sets Server.Scanner; nil means classification
-// is unavailable in this process (standalone `mgmt`, or the LLM runtime is
+// owns the verdict service sets Server.Scanner; nil means classification
+// is unavailable in this process (standalone `mgmt`, or classification is
 // disabled), which the endpoints report rather than guessing.
 type ContentScanner interface {
 	// ScanText classifies page text for adult content.

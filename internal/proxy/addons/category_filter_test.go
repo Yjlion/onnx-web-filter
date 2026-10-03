@@ -25,7 +25,7 @@ func (f *fakeCategorizer) Categorize(_ context.Context, q state.CategoryLookup) 
 	defer f.mu.Unlock()
 	f.asked = append(f.asked, q)
 	if c, ok := f.known[q.Host]; ok {
-		return state.CategoryAnswer{Category: c, Known: true, Source: "llm"}
+		return state.CategoryAnswer{Category: c, Known: true, Source: "model"}
 	}
 	if !q.Enqueue {
 		return state.CategoryAnswer{}

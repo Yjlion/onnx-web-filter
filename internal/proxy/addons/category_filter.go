@@ -12,7 +12,7 @@ import (
 
 // CategoryFilter blocks or allows websites by category (shopping, news,
 // social media, banking, ...). The category comes from the installed domain
-// lists when they know the site, otherwise from the edge LLM, cached per
+// lists when they know the site, otherwise from the embedding model, cached per
 // site (see the SiteCategorizer on the runtime).
 //
 // Only top-level navigations ask the model and wait for it, within the

@@ -18,7 +18,7 @@ func runProxy(ctx context.Context, settingsPath string) error {
 	if err != nil {
 		return fmt.Errorf("load settings: %w", err)
 	}
-	stack := app.NewLLMStack(ctx, settings.LLM)
+	stack := app.NewMLStack(ctx, settings.ML)
 	defer stack.Close()
 	eng, rt, err := app.BuildProxyEngine(settingsPath, stack.PipelineClassifiers())
 	if err != nil {
@@ -62,14 +62,13 @@ func runProxyAndMgmtWith(ctx context.Context, settingsPath string, mgmtSrv *mgmt
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// The LLM service comes up first (or reports why it cannot) so the
-	// pipeline's classifiers have a backend from the first request.
-	stack := app.NewLLMStack(ctx, mgmtSrv.Settings().LLM)
+	// The models load first (or report why they cannot) so the pipeline's
+	// classifiers have a backend from the first request.
+	stack := app.NewMLStack(ctx, mgmtSrv.Settings().ML)
 	defer stack.Close()
 	mgmtSrv.Scanner = stack.Scanner()
-	mgmtSrv.LLM = stack.Controller()
+	mgmtSrv.ML = stack.Controller()
 	mgmtSrv.Decisions = stack.Decisions()
-	mgmtSrv.LLMClient = stack.Svc.Client
 
 	eng, rt, err := app.BuildProxyEngine(settingsPath, stack.PipelineClassifiers())
 	if err != nil {

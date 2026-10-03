@@ -98,7 +98,7 @@ func TestImageVerdictCachesAndCoalesces(t *testing.T) {
 
 	// First sighting waits on the model within budget.
 	a := s.Image(context.Background(), ImageRequest{URL: "https://x.example/a.png", Data: img, Budget: 2 * time.Second})
-	if !a.Known || !a.Adult || a.Source != SourceLLM || a.Cached {
+	if !a.Known || !a.Adult || a.Source != SourceModel || a.Cached {
 		t.Fatalf("first answer = %+v", a)
 	}
 	// Second sighting is a cache hit with no model call.

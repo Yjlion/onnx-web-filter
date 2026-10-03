@@ -1,5 +1,5 @@
 // Package verdict is the decision layer between the proxy's classifier
-// addons and the edge LLM: a persistent cache of verdicts keyed by content,
+// addons and the models: a persistent cache of verdicts keyed by content,
 // a deduplicating job queue in front of the model, per-request wait
 // budgets, and site-level learning. The pipeline never calls the model
 // directly; it asks this package, which answers from cache in microseconds
@@ -37,7 +37,7 @@ type Source string
 
 const (
 	SourcePrefilter Source = "prefilter" // size/type rule, never the model
-	SourceLLM       Source = "llm"
+	SourceModel     Source = "model"
 	SourceLearned   Source = "learned" // site-level aggregation
 	SourceManual    Source = "manual"  // operator override; wins over all
 	// SourceList marks a category answered by an installed domain list. It

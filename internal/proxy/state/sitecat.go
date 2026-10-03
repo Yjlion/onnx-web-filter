@@ -28,7 +28,7 @@ type CategoryAnswer struct {
 }
 
 // SiteCategorizer sorts websites into categories: the installed domain
-// lists first, then the edge LLM, with every verdict cached per site.
+// lists first, then the embedding model, with every verdict cached per site.
 type SiteCategorizer interface {
 	Categorize(ctx context.Context, q CategoryLookup) CategoryAnswer
 }
