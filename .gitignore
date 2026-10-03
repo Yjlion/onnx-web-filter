@@ -6,7 +6,7 @@
 *.dll
 *.so
 
-# llama.cpp runtime and models downloaded at runtime
+# ONNX Runtime, models and the verdict cache downloaded at runtime
 /data/
 
 # Runtime state

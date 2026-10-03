@@ -1,13 +1,14 @@
 # onnx-web-filter - example container image.
 #
-# The proxy and the SQLite log store are pure Go, so this builds with
-# CGO_ENABLED=0. The LLM runtime (llama-server) and model are downloaded at
-# first run into the data volume. See docs/docker.md for the walkthrough.
+# The ONNX Runtime Go bindings use CGO, so the binary is built with gcc on
+# Debian (the same glibc family as the runtime stage). ONNX Runtime itself
+# and the models are downloaded at first run into the data volume. See
+# docs/docker.md for the walkthrough.
 
 # ---------------------------------------------------------------------------
 # Build stage
 # ---------------------------------------------------------------------------
-FROM golang:1.26-alpine AS build
+FROM golang:1.26-bookworm AS build
 
 # Version metadata, matching what scripts/package-release.sh stamps in, so an
 # image built from a release tag reports the same string as the tarball:
@@ -25,7 +26,7 @@ RUN go mod download
 
 COPY . .
 
-ENV CGO_ENABLED=0
+ENV CGO_ENABLED=1
 RUN go build -trimpath \
       -ldflags="-s -w \
         -X github.com/yjlion/onnx-web-filter/internal/version.Version=${VERSION} \
@@ -38,14 +39,14 @@ RUN go build -trimpath \
 # ---------------------------------------------------------------------------
 FROM debian:bookworm-slim
 
-# The prebuilt llama.cpp runtime the filter downloads on first run is a
-# glibc build linked against libstdc++, OpenMP and OpenSSL 3, which is why
-# the runtime image is Debian rather than Alpine (musl cannot load it).
+# The prebuilt ONNX Runtime library the filter downloads on first run is a
+# glibc build linked against libstdc++, which is why the runtime image is
+# Debian rather than Alpine (musl cannot load it).
 # ca-certificates is not optional: the engine fetches upstream sites over
 # TLS and verifies them against the system root store. wget is what
 # HEALTHCHECK below uses.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates tzdata wget libgomp1 libstdc++6 libssl3 \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata wget libstdc++6 \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 1000 webfilter \
  && useradd -u 1000 -g webfilter -d /data -M webfilter
@@ -61,10 +62,10 @@ USER webfilter
 WORKDIR /data
 VOLUME ["/data"]
 
-# The llama.cpp runtime, the model (about 3 GB for the default Gemma 4 E2B)
-# and the decision cache live under /data/data/llm, so keep /data on a
-# volume. Run `docker compose exec webfilter webfilter llm download` once,
-# or use the LLM page in the UI.
+# ONNX Runtime, the models (about 105 MB) and the decision cache live under
+# /data/data/ml, so keep /data on a volume. Run
+# `docker compose exec webfilter webfilter ml download` once, or use the
+# Models page in the UI.
 #
 # 8080 HTTP(S) forward proxy, 1080 SOCKS5, 8000 management UI + API.
 # Note the bootstrap settings bind SOCKS5 to `socks5@127.0.0.1:1080` - i.e.

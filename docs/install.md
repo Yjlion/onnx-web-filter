@@ -1,18 +1,19 @@
 # Installing onnx-web-filter
 
-onnx-web-filter is a single static binary. It downloads two things on first
-run: a prebuilt [llama.cpp](https://github.com/ggml-org/llama.cpp) server for
-your platform (about 16 MB on CPU, more for GPU builds) and a model in GGUF
-format (about 3 GB for the default Gemma 4 E2B). Nothing else is installed.
+onnx-web-filter is a single binary. It downloads two things on first run:
+Microsoft's prebuilt [ONNX Runtime](https://github.com/microsoft/onnxruntime)
+library for your platform (about 11 MB compressed for the CPU build, more
+for CUDA) and three small ONNX models (about 105 MB together). Nothing else
+is installed.
 
 ## Requirements
 
 | | Minimum | Comfortable |
 |---|---|---|
-| RAM | 6 GB free (default model) | 8 GB+ |
-| CPU | x86-64 with AVX2, or 64-bit ARM | 8 cores; an NVIDIA or Vulkan-capable GPU makes verdicts several times faster |
-| Disk | 4 GB in the data directory | |
-| OS | Windows 10/11, macOS 12+, Linux (glibc 2.31+, e.g. Ubuntu 20.04, Debian 11) | |
+| RAM | 1 GB free | 2 GB+ |
+| CPU | x86-64 or 64-bit ARM | 4 cores; an NVIDIA GPU is supported but rarely needed |
+| Disk | 300 MB in the data directory | |
+| OS | Windows 10/11 x64, macOS 13+ on Apple silicon, Linux x64/ARM64 (glibc 2.31+, e.g. Ubuntu 20.04, Debian 11) | |
 
 ## 1. Download
 
@@ -21,14 +22,15 @@ anywhere, for example `C:\webfilter`, `~/webfilter` or `/opt/webfilter`.
 
 | Platform | Archive |
 |---|---|
-| Windows x64 / ARM64 | `webfilter-<version>-windows-amd64.zip` / `-arm64.zip` |
-| macOS Apple Silicon / Intel | `webfilter-<version>-darwin-arm64.tar.gz` / `-amd64.tar.gz` |
+| Windows x64 | `webfilter-<version>-windows-amd64.zip` |
+| macOS Apple silicon | `webfilter-<version>-darwin-arm64.tar.gz` |
 | Linux x64 / ARM64 | `webfilter-<version>-linux-amd64.tar.gz` / `-arm64.tar.gz` |
 
-Or build from source with Go 1.26+:
+Or build from source with Go 1.26+ and a C compiler (gcc or clang; MinGW
+gcc on Windows), which the ONNX Runtime Go bindings need:
 
 ```sh
-CGO_ENABLED=0 go build -o webfilter ./cmd/webfilter
+go build -o webfilter ./cmd/webfilter
 ```
 
 ## 2. Set up
@@ -38,13 +40,14 @@ CGO_ENABLED=0 go build -o webfilter ./cmd/webfilter
 ```
 
 The wizard creates `config/settings.json` and `policies/default.json` next to
-the binary, lets you choose a model, and downloads the runtime and model into
-`data/llm/`. It detects an NVIDIA (CUDA) or Vulkan GPU and picks the matching
-llama.cpp build; `--yes` accepts the defaults, `--model qwen3.5-2b` picks a
-model, `--skip-download` only writes the config.
+the binary and downloads ONNX Runtime and the models into `data/ml/`. With
+an NVIDIA driver present on x64 Linux or Windows it fetches the CUDA build
+of the runtime. `--yes` accepts the defaults, `--skip-download` only writes
+the config.
 
-The same thing is available later as `webfilter llm download` and from the
-**LLM** page of the management UI.
+The same thing is available later as `webfilter ml download` and from the
+**Models** page of the management UI. `webfilter ml test image photo.jpg`
+shows what the image model makes of a picture.
 
 ## 3. Run
 
@@ -74,9 +77,9 @@ Sites listed under a policy's **MITM Control → exclude** (banking, by default
 
 ## 5. Turn on filtering
 
-Nothing is filtered until a policy says so. The quickest way is the
-**Assistant** page: type a request such as *Block adult content and ads for everyone*,
-check the proposed changes and apply them. See [policies.md](policies.md).
+Nothing is filtered until a policy says so. On the **Policies** page, open
+the default policy and switch on the text and image classifiers, the site
+categories you want blocked and ad blocking. See [policies.md](policies.md).
 
 ## Running as a service
 
@@ -108,8 +111,8 @@ from a terminal.
 ## Updating
 
 Replace the binary. Settings, policies, rules, certificates, logs and the
-downloaded model are all outside it. When a release pins a newer llama.cpp
-build, `webfilter llm download` fetches it; the model is reused.
+downloaded models are all outside it. When a release pins a newer ONNX
+Runtime or model, `webfilter ml download` fetches what changed.
 
 ## Where things live
 
@@ -119,7 +122,7 @@ config/rules.json        named devices (and sentence rules from earlier versions
 policies/*.json          per-client policies
 certs/                   the CA and issued certificates
 logs/webfilter.db        request and block log (SQLite)
-data/llm/                llama.cpp runtime, models, llama-server.log, decisions.db
+data/ml/                 ONNX Runtime, models, decisions.db (the verdict cache)
 data/adblock/            downloaded filter lists (empty = built-in snapshot)
 categories/              site-category blocklists (optional)
 ```

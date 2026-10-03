@@ -8,8 +8,16 @@ permissions:
   contents: write
 
 jobs:
-  goreleaser:
-    runs-on: ubuntu-latest
+  build:
+    name: package ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { name: linux/amd64, os: ubuntu-latest }
+          - { name: linux/arm64, os: ubuntu-24.04-arm }
+          - { name: darwin/arm64, os: macos-14 }
+          - { name: windows/amd64, os: windows-latest }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,11 +27,27 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Test
-        run: CGO_ENABLED=0 go test ./...
-      - uses: goreleaser/goreleaser-action@v6
+        shell: bash
+        run: go test ./...
+      - name: Package
+        shell: bash
+        run: ./scripts/package-release.sh "${GITHUB_REF_NAME}" dist
+      - uses: actions/upload-artifact@v4
         with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
+          name: dist-${{ strategy.job-index }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum ./*.tar.gz ./*.zip > checksums.txt
+      - name: Publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
