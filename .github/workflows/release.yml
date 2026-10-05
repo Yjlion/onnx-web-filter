@@ -1,53 +1,98 @@
 name: Release
 
+# A v* tag builds, packages and publishes a release. Pull requests that touch
+# the release machinery, and manual runs, do everything except publishing,
+# so packaging is tested before a tag depends on it.
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/package-release.sh
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     name: package ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - { name: linux/amd64, os: ubuntu-latest }
-          - { name: linux/arm64, os: ubuntu-24.04-arm }
-          - { name: darwin/arm64, os: macos-14 }
-          - { name: windows/amd64, os: windows-latest }
+          - { name: linux/amd64, os: ubuntu-24.04, archive: tar.gz }
+          - { name: linux/arm64, os: ubuntu-24.04-arm, archive: tar.gz }
+          - { name: darwin/arm64, os: macos-14, archive: tar.gz }
+          - { name: windows/amd64, os: windows-latest, archive: zip }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
       - name: Test
         shell: bash
         run: go test ./...
       - name: Package
         shell: bash
-        run: ./scripts/package-release.sh "${GITHUB_REF_NAME}" dist
-      - uses: actions/upload-artifact@v4
+        run: ./scripts/package-release.sh "${{ steps.version.outputs.version }}" dist
+      # Unpack what will be published and check the binary starts and
+      # reports the version it was stamped with.
+      - name: Smoke test the archive
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir smoke && cd smoke
+          if [[ "${{ matrix.archive }}" == "zip" ]]; then
+            unzip -q ../dist/*.zip
+          else
+            tar -xzf ../dist/*.tar.gz
+          fi
+          dir=$(ls -d webfilter-*)
+          ls "$dir" "$dir/docs" "$dir/config" "$dir/policies"
+          "$dir/webfilter" version | tee version.txt
+          grep -q "$VERSION" version.txt
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ strategy.job-index }}
           path: dist/*
+          if-no-files-found: error
 
   release:
+    name: publish
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
       - name: Checksums
-        run: cd dist && sha256sum ./*.tar.gz ./*.zip > checksums.txt
+        run: |
+          cd dist
+          ls -la
+          test "$(ls *.tar.gz *.zip | wc -l)" -eq 4
+          sha256sum ./*.tar.gz ./*.zip > checksums.txt
+          cat checksums.txt
       - name: Publish
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
