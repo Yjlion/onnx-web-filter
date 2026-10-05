@@ -11,6 +11,31 @@ replaces the llama.cpp language model with purpose-built classifiers. A
 verdict takes tens of milliseconds on a CPU instead of seconds, and the
 first-run download is about 120 MB instead of 3 GB.
 
+> **Vibe-coded disclaimer.** This project was built almost entirely through
+> AI-assisted sessions (Claude), with a human setting direction and testing
+> rather than writing most of the code by hand. It has real test coverage —
+> including checks against reference outputs of the models — and CI on Linux,
+> macOS and Windows, but it has only been exercised with test traffic, and it
+> has not had an independent human security audit. It intercepts TLS and holds
+> a certificate authority your devices trust: treat it as a personal/homelab
+> project, not audited security software. The classifiers are small models and
+> will make mistakes in both directions.
+
+## Screenshots
+
+Every page of the management UI is in [screenshots/](screenshots/), rendered
+against generated sample data with the real models loaded. Regenerate with
+`bash scripts/capture_screenshots.sh`.
+
+[![Dashboard](screenshots/index.png)](screenshots/)
+
+| | |
+|---|---|
+| [![Models](screenshots/models.png)](screenshots/models.png) | [![Decisions](screenshots/decisions-dark.png)](screenshots/decisions-dark.png) |
+| Models: ONNX Runtime and the three models | Decisions: cached verdicts (dark theme) |
+| [![Policy editor](screenshots/policy-editor.png)](screenshots/policy-editor.png) | [![Block page](screenshots/block-page.png)](screenshots/block-page.png) |
+| Policy editor | What a filtered client sees |
+
 - **Adult images, text and video**: an image classifier (NSFWJS MobileNetV2
   by default, or a ViT) blurs, blanks or blocks pictures and video stills; a
   DistilBERT classifier blocks adult pages. Every verdict is cached by
