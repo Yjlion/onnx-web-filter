@@ -46,11 +46,7 @@ cp policies/default.json.example "$stage/policies/"
 cp README.md LICENSE "$stage/"
 cp docs/install.md docs/ml.md docs/policies.md "$stage/docs/"
 if [[ "$goos" == "windows" ]]; then
-  if command -v zip >/dev/null; then
-    (cd "$OUT_DIR" && zip -qr "$name.zip" "$name")
-  else
-    (cd "$OUT_DIR" && powershell -NoProfile -Command "Compress-Archive -Path '$name' -DestinationPath '$name.zip' -Force")
-  fi
+  go run ./scripts/zipdir "$stage" "$OUT_DIR/$name.zip"
 else
   tar -C "$OUT_DIR" -czf "$OUT_DIR/$name.tar.gz" "$name"
 fi
