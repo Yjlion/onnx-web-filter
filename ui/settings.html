@@ -204,13 +204,13 @@
         <div id="adblock" class="bg-card rounded-xl shadow-sm border border-gray-100 p-6 space-y-4 mb-4">
           <div>
             <h2 class="text-sm font-semibold text-gray-900">Ad blocking lists</h2>
-            <p class="text-xs text-gray-500 mt-0.5">EasyList (ads) and EasyPrivacy (trackers) filter lists. A snapshot is built into the program; update to fetch the current lists. Ad blocking itself is switched on per policy or with a rule such as “Block ads on lan”.</p>
+            <p class="text-xs text-gray-500 mt-0.5">EasyList (ads) and EasyPrivacy (trackers) filter lists. A snapshot is built into the program; update to fetch the current lists. Ad blocking itself is switched on per policy.</p>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
             <div class="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
               <div class="text-xs text-gray-500">Lists</div>
               <div class="font-medium" x-text="adblock.source === 'downloaded' ? 'downloaded' : (adblock.source === 'snapshot' ? 'built-in snapshot (' + (adblock.snapshot_date || '') + ')' : (adblock.managed === false ? 'proxy process' : '—'))"></div>
-              <div class="text-xs text-gray-400 mt-0.5" x-text="adblock.updated ? 'updated ' + new Date(adblock.updated).toLocaleString() : ''"></div>
+              <div class="text-xs text-gray-400 mt-0.5" x-text="adblock.updated && new Date(adblock.updated).getFullYear() > 1970 ? 'updated ' + new Date(adblock.updated).toLocaleString() : ''"></div>
             </div>
             <div class="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
               <div class="text-xs text-gray-500">Network rules</div>

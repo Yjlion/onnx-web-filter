@@ -12,6 +12,7 @@ import (
 
 	"github.com/yjlion/onnx-web-filter/internal/config"
 	"github.com/yjlion/onnx-web-filter/internal/ml"
+	"github.com/yjlion/onnx-web-filter/internal/ml/catalog"
 	"github.com/yjlion/onnx-web-filter/internal/ml/ortrt"
 )
 
@@ -48,7 +49,7 @@ func newSetupCmd() *cobra.Command {
 		for _, t := range ml.Tasks {
 			m := svc.Model(t)
 			total += m.SizeBytes()
-			fmt.Printf("%-11s %s, %d MB (%s)\n", string(t)+" model:", m.ID, m.SizeBytes()>>20, m.License)
+			fmt.Printf("%-11s %s, %d MB (%s)\n", string(t)+" model:", m.ID, catalog.MB(m.SizeBytes()), m.License)
 		}
 		fmt.Println()
 		if skipDownload {

@@ -105,7 +105,7 @@ func (s *Service) Status() Status {
 		m := s.models[t]
 		_, inst := catalog.LoadInstalled(s.cfg.DataDir, m)
 		st.Models = append(st.Models, ModelStatus{
-			Task: t, ID: m.ID, Name: m.Name, License: m.License, SizeMB: m.SizeBytes() >> 20,
+			Task: t, ID: m.ID, Name: m.Name, License: m.License, SizeMB: catalog.MB(m.SizeBytes()),
 			Installed: inst, Loaded: providers[t] != "", Provider: providers[t],
 		})
 	}
