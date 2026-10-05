@@ -162,9 +162,13 @@ func unpack(archive, dir string) error {
 	return errors.New("unsupported archive type")
 }
 
+// safeJoin resolves an archive entry name under dir. Rooted names ("/x",
+// "\x", "C:x") are refused on every OS, even where joining would keep them
+// inside dir: an archive that contains them is not a release archive.
 func safeJoin(dir, name string) (string, error) {
 	clean := filepath.Clean(filepath.FromSlash(name))
-	if clean == "." || strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
+	if clean == "." || strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) ||
+		strings.HasPrefix(name, "/") || strings.HasPrefix(name, `\`) || filepath.VolumeName(clean) != "" {
 		return "", fmt.Errorf("unsafe path in archive: %q", name)
 	}
 	p := filepath.Join(dir, clean)

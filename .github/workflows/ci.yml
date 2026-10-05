@@ -2,17 +2,19 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
-    tags-ignore: ["v*"]
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   test:
     name: vet and test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -28,17 +30,17 @@ jobs:
 
   models:
     name: real-model tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
       # The runtime archive and the models are pinned by SHA-256 in the
       # code, so the cache only needs to change when those files do.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/wf/data/ml
           key: ml-${{ runner.os }}-${{ hashFiles('internal/ml/catalog/models.json', 'internal/ml/ortrt/checksums.go') }}
@@ -59,13 +61,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: linux/amd64, os: ubuntu-latest }
+          - { name: linux/amd64, os: ubuntu-24.04 }
           - { name: linux/arm64, os: ubuntu-24.04-arm }
           - { name: darwin/arm64, os: macos-14 }
           - { name: windows/amd64, os: windows-latest }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true

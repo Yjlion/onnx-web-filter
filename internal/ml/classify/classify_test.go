@@ -150,7 +150,10 @@ func TestImageModelsMatchReference(t *testing.T) {
 				if err != nil {
 					t.Fatalf("%s: %v", f.Case, err)
 				}
-				tol := 1e-4
+				// The fixtures come from one CPU; ONNX Runtime picks different
+				// int8 kernels by instruction set (AVX2, AVX-512, VNNI, NEON),
+				// which moves quantized outputs by up to ~1e-3.
+				tol := 2e-3
 				if f.Seed == -2 {
 					tol = 0.05
 				}
@@ -297,11 +300,12 @@ func TestTextModelMatchesReference(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if d := maxDiff(got.Probs, f.Probs); d > 1e-4 {
+		// Same CPU-dependent int8 drift as the image models.
+		if d := maxDiff(got.Probs, f.Probs); d > 2e-3 {
 			t.Errorf("%.40q: probs %v, reference %v", f.Text, got.Probs, f.Probs)
 		}
 		// The weighted score is p(nsfw) for this two-label model.
-		if math.Abs(got.Unsafe-f.Probs[1]) > 1e-4 {
+		if math.Abs(got.Unsafe-got.Probs[1]) > 1e-9 {
 			t.Errorf("unsafe %.4f, want %.4f", got.Unsafe, f.Probs[1])
 		}
 	}
@@ -367,12 +371,16 @@ func TestEmbedderMatchesReference(t *testing.T) {
 			t.Fatal(err)
 		}
 		vecs[i] = v[0]
-		got := make([]float64, len(v[0]))
-		for d, x := range v[0] {
-			got[d] = float64(x)
+		ref := make([]float32, len(f.Vector))
+		for d, x := range f.Vector {
+			ref[d] = float32(x)
 		}
-		if d := maxDiff(got, f.Vector); d > 1e-4 {
-			t.Errorf("%q: max component diff %.6f", f.Text, d)
+		// Compared by direction, which is what the site classifier uses:
+		// int8 kernels differ between CPUs and move single components by a
+		// few hundredths. Unrelated texts sit below 0.7, so 0.95 still
+		// catches broken tokenizing or pooling.
+		if c := dot(v[0], ref); c < 0.95 {
+			t.Errorf("%q: cosine to reference %.4f", f.Text, c)
 		}
 		if c := dot(batch[i], v[0]); c < 0.99 {
 			t.Errorf("%q: batched vs single cosine %.4f", f.Text, c)
