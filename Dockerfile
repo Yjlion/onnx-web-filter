@@ -8,7 +8,14 @@
 # ---------------------------------------------------------------------------
 # Build stage
 # ---------------------------------------------------------------------------
-FROM golang:1.26-bookworm AS build
+# The build stage runs on the builder's own platform and cross-compiles for
+# the target, so a multi-arch build (docker buildx --platform
+# linux/amd64,linux/arm64) does not compile under emulation.
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS build
+
+ARG TARGETOS=linux
+ARG TARGETARCH
+ARG BUILDARCH
 
 # Version metadata, matching what scripts/package-release.sh stamps in, so an
 # image built from a release tag reports the same string as the tarball:
@@ -16,6 +23,17 @@ FROM golang:1.26-bookworm AS build
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
+
+# CGO needs a C cross compiler when the target differs from the builder.
+RUN set -eu; \
+    if [ "$TARGETARCH" != "$BUILDARCH" ]; then \
+      case "$TARGETARCH" in \
+        arm64) pkgs="gcc-aarch64-linux-gnu libc6-dev-arm64-cross" ;; \
+        amd64) pkgs="gcc-x86-64-linux-gnu libc6-dev-amd64-cross" ;; \
+        *) echo "unsupported TARGETARCH $TARGETARCH" >&2; exit 1 ;; \
+      esac; \
+      apt-get update && apt-get install -y --no-install-recommends $pkgs && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 WORKDIR /src
 
@@ -27,7 +45,14 @@ RUN go mod download
 COPY . .
 
 ENV CGO_ENABLED=1
-RUN go build -trimpath \
+RUN set -eu; \
+    if [ "$TARGETARCH" != "$BUILDARCH" ]; then \
+      case "$TARGETARCH" in \
+        arm64) export CC=aarch64-linux-gnu-gcc ;; \
+        amd64) export CC=x86_64-linux-gnu-gcc ;; \
+      esac; \
+    fi; \
+    GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath \
       -ldflags="-s -w \
         -X github.com/yjlion/onnx-web-filter/internal/version.Version=${VERSION} \
         -X github.com/yjlion/onnx-web-filter/internal/version.Commit=${COMMIT} \

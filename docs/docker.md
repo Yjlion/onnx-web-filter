@@ -174,6 +174,29 @@ If you want to filter other machines without gateway mode, just give them
 the proxy address (or the PAC URL) explicitly — that is the no-privilege
 path, and per-client policies work the same way.
 
+## Published images
+
+The Docker workflow publishes multi-arch images (linux/amd64, linux/arm64)
+to the GitHub Container Registry:
+
+| Tag | Built from |
+|---|---|
+| `ghcr.io/yjlion/onnx-web-filter:latest`, `:X.Y.Z`, `:X.Y` | `v*` release tags (the first is the release after v0.0.2) |
+| `ghcr.io/yjlion/onnx-web-filter:main` | every push to `main` |
+
+To use one instead of building, replace `build:` in `docker-compose.yml`
+with `image: ghcr.io/yjlion/onnx-web-filter:latest`, or:
+
+```bash
+docker run -d --name webfilter -p 8080:8080 -p 127.0.0.1:8000:8000 \
+  -v webfilter-data:/data ghcr.io/yjlion/onnx-web-filter:latest
+docker exec webfilter webfilter ml download --settings /data/config/settings.json
+docker restart webfilter
+```
+
+The `ml download` step fetches ONNX Runtime and the models (~120 MB) into
+the volume once; the filter loads them on the next start.
+
 ## Building the image directly
 
 ```bash
@@ -185,6 +208,11 @@ docker build -t webfilter:v1.2.3 \
   --build-arg COMMIT="$(git rev-parse --short HEAD)" \
   --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" .
 ```
+
+The build stage compiles natively and cross-compiles for the target
+architecture with Debian's cross gcc (the ONNX Runtime bindings use CGO), so
+`docker buildx build --platform linux/amd64,linux/arm64 .` does not run the
+Go build under emulation.
 
 The container runs as a non-root user (uid 1000). `/data` is created and
 chowned in the image, so a **named** volume inherits that ownership; if you

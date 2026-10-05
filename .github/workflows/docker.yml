@@ -1,0 +1,102 @@
+name: Docker
+
+# Builds the image for linux/amd64 and linux/arm64. Pull requests build and
+# smoke-test it; pushes to main publish ghcr.io/<owner>/onnx-web-filter:main
+# and v* tags publish :<version>, :<major>.<minor> and :latest.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  # The image a user would run: does it start, serve the UI, and load ONNX
+  # Runtime and the models inside the Debian runtime stage?
+  smoke:
+    name: smoke test (amd64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: webfilter:smoke
+          build-args: |
+            VERSION=smoke-${{ github.sha }}
+          cache-from: type=gha,scope=amd64
+          cache-to: type=gha,scope=amd64,mode=max
+      - name: Start
+        run: |
+          docker run -d --name wf -p 8000:8000 webfilter:smoke
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8000/api/version && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/api/version | grep -q "smoke-${GITHUB_SHA}"
+      - name: Download and run the models in the container
+        run: |
+          docker exec wf webfilter ml download --settings /data/config/settings.json
+          docker exec wf webfilter ml status --settings /data/config/settings.json
+          docker exec wf webfilter ml test text --settings /data/config/settings.json \
+            "Watch naked girls stripping live, explicit hardcore videos" | tee verdict.json
+          python3 -c "import json,sys; s=json.load(open('verdict.json')); sys.exit(0 if s['unsafe'] > 0.9 else 1)"
+      - name: Logs
+        if: always()
+        run: docker logs wf 2>&1 | tail -50
+
+  image:
+    name: image amd64 + arm64
+    runs-on: ubuntu-24.04
+    needs: smoke
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      # Only the runtime stage's apt-get runs under emulation; the Go build
+      # cross-compiles natively (see the Dockerfile).
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - id: version
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then v="$GITHUB_REF_NAME"; else v="dev-${GITHUB_SHA::7}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.version.outputs.date }}
+          cache-from: type=gha,scope=multi
+          cache-to: type=gha,scope=multi,mode=max
