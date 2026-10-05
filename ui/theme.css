@@ -130,7 +130,7 @@
 }
 
 /* Smooth the switch a touch (not on transforms — keep the drawer snappy). */
-body { transition: background-color .15s ease, color .15s ease; }
+body { color: rgb(var(--wf-gray-900)); transition: background-color .15s ease, color .15s ease; }
 
 /* Form controls default to the themed surface so they don't render as native
    white boxes (with black text) in dark mode. These are element-level rules, so

@@ -33,6 +33,8 @@ func main() {
 	hours := flag.Int("hours", 48, "how far back to spread generated log entries")
 	requests := flag.Int("requests", 900, "number of request-log rows to generate")
 	port := flag.Int("mgmt-port", 8000, "mgmt_port to write into the generated settings.json")
+	proxyPort := flag.Int("proxy-port", 8080, "HTTP proxy port to write into the generated settings.json")
+	mlData := flag.String("ml-data", "", "ml.data_dir: a directory filled by `webfilter ml download`, so the models load without a download (default: <dir>/data/ml)")
 	flag.Parse()
 
 	if *dir == "" {
@@ -52,7 +54,7 @@ func main() {
 		}
 	}
 
-	if err := writeSettings(root, *port); err != nil {
+	if err := writeSettings(root, *port, *proxyPort, *mlData); err != nil {
 		log.Fatalf("write settings: %v", err)
 	}
 	if err := writePolicies(root); err != nil {
@@ -63,7 +65,7 @@ func main() {
 	}
 
 	fmt.Printf("seeded %s\n", root)
-	fmt.Printf("  start with: ./webfilter mgmt --settings %s\n", filepath.Join(root, "config", "settings.json"))
+	fmt.Printf("  start with: ./webfilter run --settings %s\n", filepath.Join(root, "config", "settings.json"))
 }
 
 func writeJSONFile(path string, v any) error {
@@ -74,7 +76,7 @@ func writeJSONFile(path string, v any) error {
 	return os.WriteFile(path, append(buf, '\n'), 0o644)
 }
 
-func writeSettings(root string, port int) error {
+func writeSettings(root string, port, proxyPort int, mlData string) error {
 	s := models.NewGlobalSettings()
 	s.MgmtHost = "127.0.0.1"
 	s.MgmtPort = port
@@ -84,7 +86,15 @@ func writeSettings(root string, port int) error {
 	s.CategoriesDir = filepath.Join(root, "categories")
 	s.LogBlocks = true
 	s.LogRequests = true
-	s.ProxyListen = []string{"127.0.0.1:8080", "socks5@127.0.0.1:1080"}
+	s.ProxyListen = []string{fmt.Sprintf("127.0.0.1:%d", proxyPort)}
+	s.ML.DataDir = filepath.Join(root, "data", "ml")
+	if mlData != "" {
+		abs, err := filepath.Abs(mlData)
+		if err != nil {
+			return err
+		}
+		s.ML.DataDir = abs
+	}
 	return writeJSONFile(filepath.Join(root, "config", "settings.json"), s)
 }
 
@@ -114,8 +124,12 @@ func defaultPolicy() models.Policy {
 	p.SafeSearch.Enabled = true
 	p.UrlFilter.Enabled = true
 	p.UrlFilter.Block = []string{"*.doubleclick.net", "ads.example.com"}
-	p.Doh.Enabled = true
-	p.Doh.Server = "https://1.1.1.3/dns-query"
+	// Classifiers and categories on, so traffic from this machine (which
+	// matches default) produces verdicts and a block page.
+	p.TextClassifier.Enabled = true
+	p.ImageClassifier.Enabled = true
+	p.CategoryFilter.Enabled = true
+	p.CategoryFilter.Categories = []string{"adult", "gambling", "malware_phishing"}
 	return p
 }
 
@@ -137,7 +151,9 @@ func kidsPolicy() models.Policy {
 	p.TextClassifier.Enabled = true
 	p.TextClassifier.Threshold = 0.75
 	p.ImageClassifier.Enabled = true
-	p.ImageClassifier.Threshold = 0.35
+	p.ImageClassifier.Threshold = 0.6
+	p.CategoryFilter.Enabled = true
+	p.CategoryFilter.Categories = []string{"adult", "dating", "gambling", "social_media", "violence_hate", "drugs_alcohol", "weapons"}
 	p.YouTube.Enabled = true
 	p.YouTube.BlockHome = true
 	p.YouTube.RemoveComments = true

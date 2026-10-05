@@ -454,7 +454,7 @@
         scan: {
           url: '',
           textThreshold: 0.80,
-          imageThreshold: 0.4,
+          imageThreshold: 0.75,
           maxImages: 50,
           loading: false,
           result: null,
@@ -521,7 +521,7 @@
             key: 'text',
             label: window.wfT('tools.healthText') || 'Text classifier',
             status: t.status || 'unknown',
-            ok: t.status === 'available',
+            ok: t.available === true,
             detail: t.detail || '',
           });
           const i = r.image_classifier || {};
@@ -529,7 +529,7 @@
             key: 'image',
             label: window.wfT('tools.healthImage') || 'Image classifier',
             status: i.status || 'unknown',
-            ok: i.status === 'available',
+            ok: i.available === true,
             detail: i.detail || '',
           });
           return rows;

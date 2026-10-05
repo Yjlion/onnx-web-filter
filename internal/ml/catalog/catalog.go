@@ -254,3 +254,6 @@ func Resolve(t Task, id string) (Model, error) {
 	}
 	return m, nil
 }
+
+// MB rounds a byte count to whole megabytes (MiB), as the UI shows sizes.
+func MB(n int64) int64 { return (n + 1<<19) >> 20 }

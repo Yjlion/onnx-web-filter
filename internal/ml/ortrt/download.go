@@ -44,16 +44,14 @@ func LoadInstalled(dataDir, version string, accel Accel) (Installed, bool) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return Installed{}, false
 	}
-	if _, err := os.Stat(m.Library); err != nil {
-		// The manifest may hold a path that no longer resolves (a data dir
-		// that was moved); the library's place inside the install dir is
-		// what counts.
-		lib, ok := FindLibrary(dir)
-		if !ok {
-			return Installed{}, false
-		}
-		m.Library = lib
+	// The library's place inside the install dir is what counts: the
+	// manifest's absolute path is stale once the data dir is moved, and
+	// points at the original if it was copied.
+	lib, ok := FindLibrary(dir)
+	if !ok {
+		return Installed{}, false
 	}
+	m.Library = lib
 	if abs, err := filepath.Abs(m.Library); err == nil {
 		m.Library = abs
 	}

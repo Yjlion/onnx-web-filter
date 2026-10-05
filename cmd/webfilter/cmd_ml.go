@@ -90,7 +90,7 @@ func newMLCmd() *cobra.Command {
 		fmt.Fprintln(tw, "ID\tTASK\tSIZE\tCONFIGURED\tINSTALLED\tLICENSE\tNAME")
 		for _, m := range catalog.All() {
 			_, inst := catalog.LoadInstalled(cfg.DataDir, m)
-			fmt.Fprintf(tw, "%s\t%s\t%d MB\t%v\t%v\t%s\t%s\n", m.ID, m.Task, m.SizeBytes()>>20,
+			fmt.Fprintf(tw, "%s\t%s\t%d MB\t%v\t%v\t%s\t%s\n", m.ID, m.Task, catalog.MB(m.SizeBytes()),
 				svc.Model(m.Task).ID == m.ID, inst, m.License, m.Name)
 		}
 		return tw.Flush()
