@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    name: vet and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # The ONNX Runtime bindings use CGO; the runner's gcc builds them.
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./...
+      - name: gofmt
+        run: test -z "$(gofmt -l . | tee /dev/stderr)"
+
+  models:
+    name: real-model tests
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # The runtime archive and the models are pinned by SHA-256 in the
+      # code, so the cache only needs to change when those files do.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/wf/data/ml
+          key: ml-${{ runner.os }}-${{ hashFiles('internal/ml/catalog/models.json', 'internal/ml/ortrt/checksums.go') }}
+      - name: Download ONNX Runtime and models
+        run: |
+          go run ./cmd/webfilter setup --yes --settings "$RUNNER_TEMP/wf/config/settings.json"
+          go run ./cmd/webfilter ml download falconsai-vit --settings "$RUNNER_TEMP/wf/config/settings.json"
+      - name: Test against the real models
+        env:
+          ML_DATA_DIR: ${{ runner.temp }}/wf/data/ml
+        run: go test -race -count=1 ./internal/ml/...
+
+  build:
+    name: build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux/amd64, os: ubuntu-latest }
+          - { name: linux/arm64, os: ubuntu-24.04-arm }
+          - { name: darwin/arm64, os: macos-14 }
+          - { name: windows/amd64, os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build
+        shell: bash
+        run: CGO_ENABLED=1 go build -trimpath -o webfilter-ci ./cmd/webfilter
+      - name: Load the runtime
+        shell: bash
+        run: |
+          ./webfilter-ci ml download nsfwjs-mobilenet --settings "$RUNNER_TEMP/wf/config/settings.json"
+          ./webfilter-ci ml status --settings "$RUNNER_TEMP/wf/config/settings.json"

@@ -1,0 +1,53 @@
+{
+  "proxy_listen": [
+    "127.0.0.1:8080",
+    "socks5@127.0.0.1:1080"
+  ],
+  "mgmt_host": "127.0.0.1",
+  "mgmt_port": 8000,
+  "mgmt_tls": false,
+  "mgmt_cert_file": "",
+  "mgmt_key_file": "",
+  "cert_dir": "./certs",
+  "policies_dir": "./policies",
+  "ui_language": "en",
+  "logs_dir": "./logs",
+  "log_blocks": true,
+  "log_requests": true,
+  "log_retention_days": 30,
+  "default_policy": null,
+  "auth_enabled": false,
+  "password_hash": "",
+  "secret_key": "",
+  "pac_direct_ips": [],
+  "metrics_enabled": true,
+  "metrics_token": "",
+  "mgmt_hostname": "web.filter",
+  "mgmt_hostname_ip": "",
+  "icap": {
+    "preview_size": 4096,
+    "max_body_bytes": 8388608,
+    "normalize_accept_encoding": true,
+    "trust_client_ip_header": true
+  },
+  "ml": {
+    "enabled": true,
+    "data_dir": "./data/ml",
+    "accel": "auto",
+    "ort_lib_path": "",
+    "image_model": "",
+    "text_model": "",
+    "site_model": "",
+    "threads": 0,
+    "parallel": 0,
+    "max_image_px": 384,
+    "adult_score": 0.9,
+    "budget": {
+      "image_ms": 500,
+      "text_ms": 500,
+      "category_ms": 500
+    }
+  },
+  "adblock_dir": "./data/adblock",
+  "adblock_sources": []
+}

@@ -1,0 +1,101 @@
+# host	title	expected slug - held out from internal/sitecat/examples.go
+xhamster.com	xHamster - Free Porn Videos & XXX Movies	adult
+youporn.com	YouPorn - free sex videos	adult
+chaturbate.com	Chaturbate - Free Adult Webcams, Live Sex	adult
+hinge.co	Hinge - the dating app designed to be deleted	dating
+pof.com	Plenty of Fish free online dating	dating
+eharmony.com	eHarmony: dating site for compatible singles	dating
+williamhill.com	William Hill sports betting and casino	gambling
+888casino.com	888 Casino: online slots and live roulette	gambling
+fanduel.com	FanDuel sportsbook and daily fantasy	gambling
+threads.net	Threads, an Instagram app	social_media
+tumblr.com	Tumblr	social_media
+vk.com	VK social network	social_media
+messenger.com	Messenger chat	chat_messaging
+signal.org	Signal private messenger	chat_messaging
+element.io	Element secure chat	chat_messaging
+mail.aol.com	AOL Mail	email
+gmx.com	GMX free email account	email
+fastmail.com	Fastmail: fast, private email	email
+bbc.com	BBC Home - Breaking News, World News	news
+washingtonpost.com	The Washington Post - breaking news and analysis	news
+spiegel.de	DER SPIEGEL - Nachrichten	news
+aljazeera.com	Al Jazeera breaking news, world news and video	news
+target.com	Target: expect more, pay less	shopping
+aliexpress.com	AliExpress online shopping for electronics, fashion	shopping
+zalando.de	Zalando online fashion shop	shopping
+bestbuy.com	Best Buy electronics, computers, appliances	shopping
+wellsfargo.com	Wells Fargo bank: checking, savings, mortgages	banking_finance
+revolut.com	Revolut: one app for all things money	banking_finance
+robinhood.com	Robinhood: commission-free stock trading	banking_finance
+binance.com	Binance cryptocurrency exchange	banking_finance
+hulu.com	Hulu: stream TV and movies	streaming_video
+dailymotion.com	Dailymotion videos	streaming_video
+primevideo.com	Prime Video: watch movies and TV	streaming_video
+deezer.com	Deezer music streaming	music_audio
+bandcamp.com	Bandcamp: discover new music	music_audio
+pandora.com	Pandora radio	music_audio
+steamcommunity.com	Steam Community	gaming
+fortnite.com	Fortnite battle royale	gaming
+poki.com	Poki free online games	gaming
+buzzfeed.com	BuzzFeed quizzes and celebrity news	entertainment
+people.com	People: celebrity news and photos	entertainment
+fandom.com	Fandom wikis for movies, TV and games	entertainment
+nfl.com	NFL official site: scores, news, schedule	sports
+bbc.com/sport	BBC Sport - scores, fixtures, news	sports
+cricinfo.com	ESPNcricinfo live cricket scores	sports
+startpage.com	Startpage private search engine	search
+ecosia.org	Ecosia - the search engine that plants trees	search
+yandex.com	Yandex search	search
+britannica.com	Encyclopedia Britannica	education
+edx.org	edX free online courses from Harvard and MIT	education
+stanford.edu	Stanford University	education
+quizlet.com	Quizlet flashcards and study tools	education
+starfall.com	Starfall learn to read with phonics for kids	kids
+funbrain.com	Funbrain games and books for kids	kids
+kids.nationalgeographic.com	National Geographic Kids	kids
+whitehouse.gov	The White House	government
+canada.ca	Government of Canada	government
+ssa.gov	Social Security Administration	government
+nhs.uk	NHS website for England: health advice	health
+healthline.com	Healthline: medical information and health advice	health
+walgreens.com	Walgreens pharmacy	health
+tripadvisor.com	Tripadvisor: hotels, restaurants and things to do	travel
+ryanair.com	Ryanair cheap flights	travel
+hotels.com	Hotels.com cheap hotel deals	travel
+ziprecruiter.com	ZipRecruiter job search	jobs
+stepstone.de	StepStone Jobs	jobs
+careerbuilder.com	CareerBuilder find jobs	jobs
+churchofjesuschrist.org	The Church of Jesus Christ of Latter-day Saints	religion
+islamicfinder.org	IslamicFinder prayer times and Quran	religion
+bible.com	Bible.com read the Bible app	religion
+gitlab.com	GitLab DevSecOps platform	technology
+arstechnica.com	Ars Technica technology news	technology
+developer.mozilla.org	MDN Web Docs	technology
+nvidia.com	NVIDIA graphics cards and AI computing	technology
+hubspot.com	HubSpot CRM and marketing software	business
+atlassian.com	Atlassian Jira and Confluence for teams	business
+docusign.com	DocuSign electronic signatures	business
+adservice.google.com		ads_tracking
+criteo.com	Criteo advertising	ads_tracking
+hotjar.com	Hotjar heatmaps and session recording	ads_tracking
+taboola.com	Taboola content recommendations ads	ads_tracking
+amaz0n-billing-update.example	Your account has been suspended, update billing	malware_phishing
+microsoft-support-alert.example	Virus detected! Call Microsoft support now	malware_phishing
+bank-security-check.example	Confirm your online banking password	malware_phishing
+yts.mx	YTS movie torrents	piracy
+nyaa.si	Nyaa anime torrents	piracy
+libgen.example	Library Genesis free ebooks download	piracy
+weedmaps.com	Weedmaps cannabis dispensaries and delivery	drugs_alcohol
+totalwine.com	Total Wine: wine, spirits and beer	drugs_alcohol
+juul.com	JUUL vapor products	drugs_alcohol
+cheaperthandirt.com	Cheaper Than Dirt guns and ammo	weapons
+brownells.com	Brownells firearms parts and accessories	weapons
+armslist.com	Armslist firearms marketplace	weapons
+liveleak-gore.example	Shocking gore videos uncensored	violence_hate
+stormfront.example	Stormfront white nationalist community	violence_hate
+ajax.googleapis.com		infrastructure
+cdnjs.cloudflare.com		infrastructure
+static.xx.fbcdn.net		infrastructure
+i.ytimg.com		infrastructure
+oauth2.googleapis.com		infrastructure

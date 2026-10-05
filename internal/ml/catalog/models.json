@@ -1,0 +1,92 @@
+[
+  {
+    "id": "nsfwjs-mobilenet",
+    "name": "NSFWJS MobileNetV2 (GantMan), int8",
+    "task": "image",
+    "description": "5-class drawings/hentai/neutral/porn/sexy classifier; ~20 ms per image on one CPU core.",
+    "license": "MIT",
+    "repo": "Sunxyw/nsfwjs-onnx",
+    "revision": "38708a81164d44faab3e6fd4c9f2543db5ddf473",
+    "files": [
+      {"role": "model", "path": "onnx/model_quantized.onnx", "size": 17320391, "sha256": "547891d566e735260b312fd865c40228e0ea75a1d1dd913653555c94e2ad49fd"}
+    ],
+    "image": {
+      "size": 224,
+      "layout": "NHWC",
+      "mean": [0, 0, 0],
+      "std": [1, 1, 1],
+      "input": "input",
+      "output": "prediction",
+      "softmax": false
+    },
+    "labels": ["drawings", "hentai", "neutral", "porn", "sexy"],
+    "unsafe": {"porn": 1, "hentai": 1, "sexy": 0.5},
+    "default": true
+  },
+  {
+    "id": "falconsai-vit",
+    "name": "Falconsai NSFW ViT-base, int8",
+    "task": "image",
+    "description": "2-class normal/nsfw vision transformer; more accurate on photos, ~150 ms per image on 3 CPU cores.",
+    "license": "Apache-2.0",
+    "repo": "onnx-community/nsfw_image_detection-ONNX",
+    "revision": "1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5",
+    "files": [
+      {"role": "model", "path": "onnx/model_int8.onnx", "size": 87333629, "sha256": "bdc941491cd09ae75c5f40b038a5cd64482fa4e2b5297747323c5cda31303920"}
+    ],
+    "image": {
+      "size": 224,
+      "layout": "NCHW",
+      "mean": [0.5, 0.5, 0.5],
+      "std": [0.5, 0.5, 0.5],
+      "input": "pixel_values",
+      "output": "logits",
+      "softmax": true
+    },
+    "labels": ["normal", "nsfw"],
+    "unsafe": {"nsfw": 1}
+  },
+  {
+    "id": "distilbert-nsfw",
+    "name": "DistilBERT NSFW text classifier, int8",
+    "task": "text",
+    "description": "eliasalbouzidi/distilbert-nsfw-text-classifier exported to ONNX; English page text, safe/nsfw.",
+    "license": "Apache-2.0",
+    "repo": "jdp8/distilbert-nsfw-text-classifier",
+    "revision": "c8578cfc1f8a99098682c715aa1194b7ae506aae",
+    "files": [
+      {"role": "model", "path": "onnx/model_int8.onnx", "size": 67537144, "sha256": "1ab89445dea26129bac038cd6e8c65f220ef2150cc56ede854c807cadfbb3bc7"},
+      {"role": "tokenizer", "path": "tokenizer.json", "size": 711494, "sha256": "435667fab0c06c165b1283ecb422497c37124f2d6a35b2ac73dc876332fc9518"}
+    ],
+    "text": {
+      "max_len": 256,
+      "inputs": ["input_ids", "attention_mask"],
+      "output": "logits",
+      "softmax": true
+    },
+    "labels": ["safe", "nsfw"],
+    "unsafe": {"nsfw": 1},
+    "default": true
+  },
+  {
+    "id": "minilm-l6",
+    "name": "all-MiniLM-L6-v2 sentence embeddings, int8",
+    "task": "site",
+    "description": "Sorts sites into categories by comparing an embedding of host, title and description with each category's description.",
+    "license": "Apache-2.0",
+    "repo": "sentence-transformers/all-MiniLM-L6-v2",
+    "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    "files": [
+      {"role": "model", "path": "onnx/model_qint8_arm64.onnx", "size": 23026053, "sha256": "4278337fd0ff3c68bfb6291042cad8ab363e1d9fbc43dcb499fe91c871902474"},
+      {"role": "tokenizer", "path": "tokenizer.json", "size": 466247, "sha256": "be50c3628f2bf5bb5e3a7f17b1f74611b2561a3a27eeab05e5aa30f411572037"}
+    ],
+    "embed": {
+      "max_len": 128,
+      "inputs": ["input_ids", "attention_mask", "token_type_ids"],
+      "output": "last_hidden_state",
+      "pooling": "mean",
+      "normalize": true
+    },
+    "default": true
+  }
+]

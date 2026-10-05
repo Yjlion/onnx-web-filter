@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: package ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { name: linux/amd64, os: ubuntu-latest }
+          - { name: linux/arm64, os: ubuntu-24.04-arm }
+          - { name: darwin/arm64, os: macos-14 }
+          - { name: windows/amd64, os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test
+        shell: bash
+        run: go test ./...
+      - name: Package
+        shell: bash
+        run: ./scripts/package-release.sh "${GITHUB_REF_NAME}" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ strategy.job-index }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum ./*.tar.gz ./*.zip > checksums.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
