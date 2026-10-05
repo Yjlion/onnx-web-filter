@@ -83,7 +83,7 @@ func TestResolveAccel(t *testing.T) {
 
 func TestSafeJoinRejectsEscapes(t *testing.T) {
 	dir := t.TempDir()
-	for _, bad := range []string{"../x", "/etc/passwd", "a/../../b"} {
+	for _, bad := range []string{"../x", "/etc/passwd", `\windows\x`, "a/../../b", `..\x`} {
 		if _, err := safeJoin(dir, bad); err == nil {
 			t.Errorf("safeJoin(%q) should fail", bad)
 		}
