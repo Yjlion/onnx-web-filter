@@ -42,6 +42,7 @@
     "parallel": 0,
     "max_image_px": 384,
     "adult_score": 0.9,
+    "page_category_days": 30,
     "budget": {
       "image_ms": 500,
       "text_ms": 500,

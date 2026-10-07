@@ -92,7 +92,7 @@
         <div class="bg-card rounded-xl shadow-sm border border-gray-100 mb-6">
           <div class="px-6 py-4 border-b border-gray-100">
             <h2 class="text-base font-semibold text-gray-900">Add an override</h2>
-            <p class="text-xs text-gray-400 mt-0.5">A site override applies to every page and image on that registrable domain (e.g. <span class="font-mono">example.com</span>); a host override marks an ad/tracker host; a category override sets what kind of site a domain (or one exact host) is.</p>
+            <p class="text-xs text-gray-400 mt-0.5">A site override applies to every page and image on that registrable domain (e.g. <span class="font-mono">example.com</span>); a host override marks an ad/tracker host; a category override sets what kind of site a domain (or one exact host) is; a page category override sets it for one page URL and wins over the site's.</p>
           </div>
           <div class="px-6 py-4 flex flex-wrap gap-3 items-end">
             <div>
@@ -101,19 +101,20 @@
                 <option value="site">site (domain)</option>
                 <option value="host">host (ad/tracker)</option>
                 <option value="category">category (site type)</option>
+                <option value="page_category">page category (one URL)</option>
               </select>
             </div>
             <div class="flex-1 min-w-48">
-              <label class="block text-xs font-medium text-gray-600 mb-1">Domain / host</label>
-              <input type="text" x-model="ov.key" placeholder="example.com" class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+              <label class="block text-xs font-medium text-gray-600 mb-1" x-text="ov.kind === 'page_category' ? 'Page URL' : 'Domain / host'"></label>
+              <input type="text" x-model="ov.key" :placeholder="ov.kind === 'page_category' ? 'https://example.com/news/today' : 'example.com'" class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
             </div>
-            <div x-show="ov.kind === 'category'">
+            <div x-show="isCategory(ov.kind)">
               <label class="block text-xs font-medium text-gray-600 mb-1">Category</label>
               <select x-model="ov.category" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-card">
                 <template x-for="c in siteCategories" :key="c.slug"><option :value="c.slug" x-text="c.label"></option></template>
               </select>
             </div>
-            <div x-show="ov.kind !== 'category'">
+            <div x-show="!isCategory(ov.kind)">
               <label class="block text-xs font-medium text-gray-600 mb-1">Verdict</label>
               <select x-model="ov.adult" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-card">
                 <option value="true">adult / block</option>
@@ -138,6 +139,7 @@
               <option value="site">Sites</option>
               <option value="host">Hosts</option>
               <option value="category">Site categories</option>
+              <option value="page_category">Page categories</option>
             </select>
             <input type="text" x-model="filter.q" @keyup.enter="load()" placeholder="Search URL, host or detail…" class="flex-1 min-w-48 border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
             <button @click="load()" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-card border border-gray-200 rounded-lg hover:bg-gray-50">Search</button>
@@ -163,9 +165,9 @@
                     <td class="px-6 py-2 whitespace-nowrap text-gray-500" x-text="fmtTime(d.created)"></td>
                     <td class="px-3 py-2" x-text="d.kind"></td>
                     <td class="px-3 py-2 whitespace-nowrap">
-                      <span x-show="d.kind === 'category'" class="badge text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-700"
+                      <span x-show="isCategory(d.kind)" class="badge text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-700"
                             x-text="catLabel(d.category) + (d.source === 'model' ? ' · ' + (d.confidence || 0).toFixed(2) : '')"></span>
-                      <span x-show="d.kind !== 'category'" class="badge text-xs px-2 py-0.5 rounded-full" :class="d.adult ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
+                      <span x-show="!isCategory(d.kind)" class="badge text-xs px-2 py-0.5 rounded-full" :class="d.adult ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
                             x-text="(d.adult ? 'adult' : 'clean') + ' · ' + (d.score || 0).toFixed(2)"></span>
                     </td>
                     <td class="px-3 py-2 max-w-xs truncate font-mono text-xs" :title="d.hint || d.key" x-text="d.hint || d.key"></td>
@@ -173,7 +175,7 @@
                     <td class="px-3 py-2" x-text="d.source"></td>
                     <td class="px-3 py-2 text-right" x-text="d.hits"></td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">
-                      <button x-show="d.kind !== 'category'" @click="flip(d)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-card border border-gray-200 rounded-lg hover:bg-gray-50" x-text="d.adult ? 'Mark clean' : 'Mark adult'"></button>
+                      <button x-show="!isCategory(d.kind)" @click="flip(d)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-card border border-gray-200 rounded-lg hover:bg-gray-50" x-text="d.adult ? 'Mark clean' : 'Mark adult'"></button>
                       <button @click="del(d)" class="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100">Forget</button>
                     </td>
                   </tr>
@@ -203,6 +205,7 @@
           } catch (e) {}
           await this.load();
         },
+        isCategory(kind) { return kind === 'category' || kind === 'page_category'; },
         catLabel(slug) {
           const c = this.siteCategories.find(c => c.slug === slug);
           return c ? c.label : (slug || '?');
@@ -239,7 +242,7 @@
         async override() {
           if (!this.ov.key.trim()) { this.flash('Enter a domain or host.', 'error'); return; }
           try {
-            await this.post('/api/decisions/override', { kind: this.ov.kind, key: this.ov.key.trim().toLowerCase(), adult: this.ov.adult === 'true', note: this.ov.note, category: this.ov.category });
+            await this.post('/api/decisions/override', { kind: this.ov.kind, key: this.ov.kind === 'page_category' ? this.ov.key.trim() : this.ov.key.trim().toLowerCase(), adult: this.ov.adult === 'true', note: this.ov.note, category: this.ov.category });
             this.flash('Override saved.'); this.ov.key = ''; this.ov.note = '';
             await this.load();
           } catch (e) { this.flash(e.message, 'error'); }

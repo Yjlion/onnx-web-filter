@@ -30,6 +30,10 @@ const (
 	// KindCategory is a website's taxonomy category (internal/sitecat),
 	// keyed by eTLD+1, or by exact host for a manual override.
 	KindCategory Kind = "category"
+	// KindPage is one page's taxonomy category, keyed by sitecat.PageKey.
+	// ContentHash records the content it was judged from, so a page whose
+	// content changes is asked again.
+	KindPage Kind = "page_category"
 )
 
 // Source says where a verdict came from, in increasing order of authority.
@@ -58,8 +62,10 @@ type Decision struct {
 	Created    time.Time `json:"created"`
 	Hits       int64     `json:"hits"`
 	Confidence float64   `json:"confidence"`
-	// Category is the taxonomy slug for KindCategory rows.
+	// Category is the taxonomy slug for KindCategory and KindPage rows.
 	Category string `json:"category,omitempty"`
+	// ContentHash identifies the page content a KindPage row was judged from.
+	ContentHash string `json:"content_hash,omitempty"`
 }
 
 const schemaSQL = `
@@ -76,6 +82,7 @@ CREATE TABLE IF NOT EXISTS decisions (
   created    INTEGER NOT NULL,
   hits       INTEGER NOT NULL DEFAULT 0,
   category   TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (kind, key)
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_created ON decisions(created);
@@ -152,6 +159,11 @@ func migrate(db *sql.DB) error {
 			return err
 		}
 	}
+	if !has["content_hash"] {
+		if _, err := db.Exec(`ALTER TABLE decisions ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -173,12 +185,12 @@ func (s *Store) Get(kind Kind, key string) (Decision, bool) {
 		s.countHit(ck)
 		return d, true
 	}
-	row := s.db.QueryRow(`SELECT score, adult, source, model, detail, hint, confidence, created, hits, category FROM decisions WHERE kind=? AND key=?`, kind, key)
+	row := s.db.QueryRow(`SELECT score, adult, source, model, detail, hint, confidence, created, hits, category, content_hash FROM decisions WHERE kind=? AND key=?`, kind, key)
 	var d Decision
 	var adult int
 	var created int64
 	var model, detail, hint sql.NullString
-	if err := row.Scan(&d.Score, &adult, &d.Source, &model, &detail, &hint, &d.Confidence, &created, &d.Hits, &d.Category); err != nil {
+	if err := row.Scan(&d.Score, &adult, &d.Source, &model, &detail, &hint, &d.Confidence, &created, &d.Hits, &d.Category, &d.ContentHash); err != nil {
 		return Decision{}, false
 	}
 	d.Kind, d.Key, d.Adult = kind, key, adult != 0
@@ -202,12 +214,12 @@ func (s *Store) Put(d Decision) error {
 	if d.Adult {
 		adult = 1
 	}
-	_, err := s.db.Exec(`INSERT INTO decisions(kind,key,score,adult,source,model,detail,hint,confidence,created,hits,category)
-		VALUES(?,?,?,?,?,?,?,?,?,?,0,?)
+	_, err := s.db.Exec(`INSERT INTO decisions(kind,key,score,adult,source,model,detail,hint,confidence,created,hits,category,content_hash)
+		VALUES(?,?,?,?,?,?,?,?,?,?,0,?,?)
 		ON CONFLICT(kind,key) DO UPDATE SET score=excluded.score, adult=excluded.adult, source=excluded.source,
 		  model=excluded.model, detail=excluded.detail, hint=excluded.hint, confidence=excluded.confidence, created=excluded.created,
-		  category=excluded.category`,
-		d.Kind, d.Key, d.Score, adult, d.Source, d.Model, d.Detail, d.Hint, d.Confidence, d.Created.Unix(), d.Category)
+		  category=excluded.category, content_hash=excluded.content_hash`,
+		d.Kind, d.Key, d.Score, adult, d.Source, d.Model, d.Detail, d.Hint, d.Confidence, d.Created.Unix(), d.Category, d.ContentHash)
 	if err != nil {
 		return err
 	}
@@ -240,6 +252,20 @@ func (s *Store) Clear(kind Kind, includeManual bool) error {
 	return err
 }
 
+// Prune removes the decisions of kind last judged before cutoff, except
+// manual ones, and reports how many went.
+func (s *Store) Prune(kind Kind, cutoff time.Time) (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM decisions WHERE kind=? AND source<>? AND created<?`, kind, SourceManual, cutoff.Unix())
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		s.lru.purge()
+	}
+	return n, nil
+}
+
 // List returns decisions newest first, optionally filtered by kind and a
 // substring of the key or hint.
 func (s *Store) List(kind Kind, query string, limit int) ([]Decision, error) {
@@ -247,7 +273,7 @@ func (s *Store) List(kind Kind, query string, limit int) ([]Decision, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	q := `SELECT kind, key, score, adult, source, model, detail, hint, confidence, created, hits, category FROM decisions WHERE 1=1`
+	q := `SELECT kind, key, score, adult, source, model, detail, hint, confidence, created, hits, category, content_hash FROM decisions WHERE 1=1`
 	var args []any
 	if kind != "" {
 		q += ` AND kind=?`
@@ -271,7 +297,7 @@ func (s *Store) List(kind Kind, query string, limit int) ([]Decision, error) {
 		var adult int
 		var created int64
 		var model, detail, hint sql.NullString
-		if err := rows.Scan(&d.Kind, &d.Key, &d.Score, &adult, &d.Source, &model, &detail, &hint, &d.Confidence, &created, &d.Hits, &d.Category); err != nil {
+		if err := rows.Scan(&d.Kind, &d.Key, &d.Score, &adult, &d.Source, &model, &detail, &hint, &d.Confidence, &created, &d.Hits, &d.Category, &d.ContentHash); err != nil {
 			return nil, err
 		}
 		d.Adult = adult != 0

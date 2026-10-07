@@ -343,6 +343,20 @@ func (s *Service) Site(ctx context.Context, host, title, description string) (cl
 	return sc, err
 }
 
+// Page ranks the categories for one page from its URL and content.
+func (s *Service) Page(ctx context.Context, url, title, description, text string) (classify.SiteScores, error) {
+	started := time.Now()
+	s.handles.RLock()
+	defer s.handles.RUnlock()
+	if s.site == nil {
+		observe("page_category", started, ErrNotReady)
+		return classify.SiteScores{}, ErrNotReady
+	}
+	sc, err := s.site.ClassifyPage(ctx, url, title, description, text)
+	observe("page_category", started, err)
+	return sc, err
+}
+
 func observe(kind string, started time.Time, err error) {
 	result := "ok"
 	switch {

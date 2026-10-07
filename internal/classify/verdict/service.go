@@ -40,6 +40,9 @@ type Backend interface {
 	// Site sorts a website into the sitecat taxonomy (Result.Category).
 	// title and description are optional page context.
 	Site(ctx context.Context, host, title, description string) (Result, error)
+	// Page sorts one page into the sitecat taxonomy from its URL and
+	// content (Result.Category).
+	Page(ctx context.Context, url, title, description, text string) (Result, error)
 }
 
 // HostCapable is implemented by a Backend that can say whether it judges
@@ -119,6 +122,7 @@ type hashEntry struct {
 type job struct {
 	kind     Kind
 	key      string
+	hash     string // content hash, for KindPage
 	hint     string
 	priority int // lower runs first
 	run      func(ctx context.Context) (Result, error)
@@ -173,6 +177,15 @@ func (s *Service) QueueDepth() int {
 	return len(s.queue)
 }
 
+// id is the job's in-flight identity: the cache key, plus the content hash
+// for a page so a changed page is not coalesced onto its old content.
+func (j *job) id() string {
+	if j.hash != "" {
+		return cacheKey(j.kind, j.key) + "\x00" + j.hash
+	}
+	return cacheKey(j.kind, j.key)
+}
+
 func (s *Service) worker() {
 	defer s.workers.Done()
 	for {
@@ -203,11 +216,11 @@ func (s *Service) worker() {
 		metrics.VerdictJobDuration.Observe(time.Since(started).Seconds(), string(j.kind))
 		if err == nil {
 			j.answer = Decision{Kind: j.kind, Key: j.key, Score: res.Score, Adult: res.Adult, Source: SourceModel,
-				Model: s.backend.ModelID(), Detail: res.Detail, Hint: j.hint, Confidence: res.Confidence, Category: res.Category, Created: time.Now()}
+				Model: s.backend.ModelID(), Detail: res.Detail, Hint: j.hint, Confidence: res.Confidence, Category: res.Category, ContentHash: j.hash, Created: time.Now()}
 			if perr := s.store.Put(j.answer); perr != nil {
 				slog.Warn("verdict: cache write failed", "err", perr)
 			}
-			if j.kind != KindHost && j.kind != KindCategory {
+			if j.kind != KindHost && j.kind != KindCategory && j.kind != KindPage {
 				s.store.RecordSite(siteOf(j.hint), res.Adult)
 			}
 		} else {
@@ -215,7 +228,7 @@ func (s *Service) worker() {
 			metrics.VerdictErrors.Inc(string(j.kind))
 		}
 		s.mu.Lock()
-		delete(s.jobs, cacheKey(j.kind, j.key))
+		delete(s.jobs, j.id())
 		s.mu.Unlock()
 		close(j.done)
 	}
@@ -226,7 +239,7 @@ var ErrQueueFull = errors.New("verdict queue full")
 
 // enqueue registers a job or returns the in-flight one for the same key.
 func (s *Service) enqueue(j *job) (*job, error) {
-	ck := cacheKey(j.kind, j.key)
+	ck := j.id()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if existing, ok := s.jobs[ck]; ok {
@@ -351,12 +364,7 @@ func (s *Service) Text(ctx context.Context, req TextRequest) Answer {
 		metrics.VerdictOutcomes.Inc("text", "site")
 		return Answer{Decision: site, Known: true, Cached: true}
 	}
-	norm := strings.ToLower(strings.Join(strings.Fields(req.Title+" "+req.Text), " "))
-	if len(norm) > 4096 {
-		norm = norm[:4096]
-	}
-	sum := sha256.Sum256([]byte(norm))
-	key := hex.EncodeToString(sum[:])
+	norm, key := textKey(req.Title + " " + req.Text)
 	if d, ok := s.store.Get(KindText, key); ok {
 		metrics.VerdictOutcomes.Inc("text", "cache")
 		return Answer{Decision: d, Known: true, Cached: true}
@@ -378,6 +386,17 @@ func (s *Service) Text(ctx context.Context, req TextRequest) Answer {
 		return Answer{Unavailable: true}
 	}
 	return s.wait(ctx, queued, req.Budget)
+}
+
+// textKey normalizes page text (lowercased, whitespace folded, at most 4 KB)
+// and returns it with its hash, the key text verdicts are cached under.
+func textKey(text string) (norm, key string) {
+	norm = strings.ToLower(strings.Join(strings.Fields(text), " "))
+	if len(norm) > 4096 {
+		norm = norm[:4096]
+	}
+	sum := sha256.Sum256([]byte(norm))
+	return norm, hex.EncodeToString(sum[:])
 }
 
 // HostRequest describes a hostname to classify as ad/tracker.
@@ -449,15 +468,11 @@ func (s *Service) Category(ctx context.Context, req CategoryRequest) Answer {
 		return Answer{}
 	}
 	site := sitecat.SiteKey(host)
-	if d, ok := s.store.Get(KindCategory, host); ok && d.Source == SourceManual {
+	if d, ok := s.manualCategory(host); ok {
 		metrics.VerdictOutcomes.Inc("category", "manual")
 		return Answer{Decision: d, Known: true, Cached: true}
 	}
 	cached, haveCached := s.store.Get(KindCategory, site)
-	if haveCached && cached.Source == SourceManual {
-		metrics.VerdictOutcomes.Inc("category", "manual")
-		return Answer{Decision: cached, Known: true, Cached: true}
-	}
 	if req.ListCategory != "" {
 		metrics.VerdictOutcomes.Inc("category", "list")
 		return Answer{Known: true, Cached: true, Decision: Decision{Kind: KindCategory, Key: site, Category: req.ListCategory,
@@ -487,6 +502,113 @@ func (s *Service) Category(ctx context.Context, req CategoryRequest) Answer {
 		return Answer{Unavailable: true}
 	}
 	return s.wait(ctx, queued, req.Budget)
+}
+
+// manualCategory returns an operator's category for the exact host, else
+// for its site.
+func (s *Service) manualCategory(host string) (Decision, bool) {
+	if d, ok := s.store.Get(KindCategory, host); ok && d.Source == SourceManual {
+		return d, true
+	}
+	if d, ok := s.store.Get(KindCategory, sitecat.SiteKey(host)); ok && d.Source == SourceManual {
+		return d, true
+	}
+	return Decision{}, false
+}
+
+// PageCategoryRequest asks for one page's taxonomy category.
+type PageCategoryRequest struct {
+	// URL is the page's address; it is reduced to sitecat.PageKey.
+	URL string
+	// Title, Description and Text are the page's extracted content. The
+	// verdict is cached against a hash of them, so changed content is
+	// judged again.
+	Title, Description, Text string
+	// Budget is how long to wait for the model (0 = fire and forget).
+	Budget time.Duration
+}
+
+// PageCategory answers which category a page belongs to, from its own
+// content. Order: a manual override for the page, then for its host or
+// site, then a cached verdict for the same content, then the model within
+// the budget. Domain lists are not consulted: a page verdict is more
+// specific than its domain's. A page with no content comes back !Known
+// with neither TimedOut nor Unavailable set.
+func (s *Service) PageCategory(ctx context.Context, req PageCategoryRequest) Answer {
+	key := sitecat.PageKey(req.URL)
+	if key == "" {
+		return Answer{}
+	}
+	if a, ok := s.manualPageCategory(key); ok {
+		return a
+	}
+	if strings.TrimSpace(req.Title+req.Description+req.Text) == "" {
+		return Answer{}
+	}
+	_, hash := textKey(req.Title + " " + req.Description + " " + req.Text)
+	if d, ok := s.store.Get(KindPage, key); ok && d.ContentHash == hash {
+		metrics.VerdictOutcomes.Inc("page_category", "cache")
+		return Answer{Decision: d, Known: true, Cached: true}
+	}
+	if !s.backend.Ready() {
+		metrics.VerdictOutcomes.Inc("page_category", "unavailable")
+		return Answer{Unavailable: true}
+	}
+	prio := 2
+	if req.Budget > 0 {
+		prio = 0 // a browser is waiting on this page
+	}
+	u, title, desc, text := req.URL, req.Title, req.Description, req.Text
+	queued, err := s.enqueue(&job{kind: KindPage, key: key, hash: hash, hint: u, priority: prio, run: func(ctx context.Context) (Result, error) {
+		return s.backend.Page(ctx, u, title, desc, text)
+	}})
+	if err != nil {
+		return Answer{Unavailable: true}
+	}
+	return s.wait(ctx, queued, req.Budget)
+}
+
+// CachedPageCategory answers from the cache alone, whatever content the
+// stored verdict was judged from. Manual overrides for the page, host or
+// site win.
+func (s *Service) CachedPageCategory(url string) Answer {
+	key := sitecat.PageKey(url)
+	if key == "" {
+		return Answer{}
+	}
+	if a, ok := s.manualPageCategory(key); ok {
+		return a
+	}
+	if d, ok := s.store.Get(KindPage, key); ok {
+		metrics.VerdictOutcomes.Inc("page_category", "cache")
+		return Answer{Decision: d, Known: true, Cached: true}
+	}
+	return Answer{}
+}
+
+func (s *Service) manualPageCategory(key string) (Answer, bool) {
+	d, ok := s.store.Get(KindPage, key)
+	if !ok || d.Source != SourceManual {
+		d, ok = s.manualCategory(sitecat.HostOf(key))
+	}
+	if !ok || d.Source != SourceManual {
+		return Answer{}, false
+	}
+	metrics.VerdictOutcomes.Inc("page_category", "manual")
+	return Answer{Decision: d, Known: true, Cached: true}, true
+}
+
+// OverridePageCategory pins one page's category to slug.
+func (s *Service) OverridePageCategory(url, slug, note string) error {
+	if !sitecat.Valid(slug) {
+		return fmt.Errorf("unknown category %q", slug)
+	}
+	key := sitecat.PageKey(url)
+	if key == "" {
+		return fmt.Errorf("invalid page URL %q", url)
+	}
+	return s.store.Put(Decision{Kind: KindPage, Key: key, Category: slug, Source: SourceManual,
+		Detail: note, Confidence: 1, Created: time.Now()})
 }
 
 func (s *Service) enqueueCategory(site, host, title, desc string, prio int) (*job, error) {

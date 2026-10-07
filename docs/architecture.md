@@ -46,7 +46,9 @@ client ──► listeners (HTTP proxy, SOCKS5, transparent, ICAP)
    (lists, cache, and for a navigation the model's category within a
    500 ms budget; ad hosts come from EasyList alone).
 3. The response is fetched identity-encoded and buffered.
-4. `AdBlocker` injects cosmetic CSS; `TextClassifier` extracts the page's
+4. `CategoryFilter` categorizes a navigation's page from its own content
+   (cached per URL and content hash, so a changed page is judged again) and
+   blocks it if the page's category is refused. `AdBlocker` injects cosmetic CSS; `TextClassifier` extracts the page's
    text, asks the verdict service (cache → model within the budget) and
    blocks or passes; it also hands the page's image URLs to the prefetcher.
 5. `ImageClassifier` does the same per image (and per inline data URI),
@@ -59,7 +61,8 @@ The models answer in tens of milliseconds on a CPU, but web pages reference
 dozens of images and a busy household loads many pages at once. Every
 verdict is
 cached by content (exact hash, perceptual hash for images, text hash for
-pages, registrable domain for learned sites), so anything seen once is free
+pages, URL plus content hash for page categories, registrable domain for
+learned sites and site categories), so anything seen once is free
 forever; and the proxy never waits longer than a budget, applying a
 policy-chosen fallback instead while the model finishes in the background.
 Requests for the same content share one model call, and a bounded queue

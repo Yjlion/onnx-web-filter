@@ -60,8 +60,8 @@ var (
 		[]string{"classifier", "result"},
 	)
 
-	// MLRequests counts model inferences by kind (image/text/category) and
-	// outcome (ok/error/timeout/unavailable).
+	// MLRequests counts model inferences by kind (image/text/category/
+	// page_category) and outcome (ok/error/timeout/unavailable).
 	MLRequests = Default.NewCounterVec(
 		"webfilter_ml_requests_total",
 		"ONNX model inferences, by kind and outcome.",

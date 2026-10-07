@@ -175,6 +175,10 @@
               <input type="number" min="64" max="2048" x-model.number="settings.ml.max_image_px" class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Keep page categories for (days)</label>
+              <input type="number" min="1" max="3650" x-model.number="settings.ml.page_category_days" class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
               <label class="block text-xs font-medium text-gray-600 mb-1">ONNX Runtime library (optional)</label>
               <input type="text" x-model="settings.ml.ort_lib_path" placeholder="/usr/lib/libonnxruntime.so" class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <p class="text-xs text-gray-400 mt-1">When set, this library is loaded instead of the downloaded one.</p>
@@ -580,7 +584,7 @@
         mlCatalog: [],
         adblock: {},
         adblockUpdating: false,
-        settings: { ml: { enabled: true, accel: 'auto', ort_lib_path: '', image_model: '', text_model: '', site_model: '', threads: 0, parallel: 0, max_image_px: 384, adult_score: 0.9, data_dir: '', budget: { image_ms: 500, text_ms: 500, category_ms: 500 } }, proxy_listen: ['0.0.0.0:8080', 'socks5@127.0.0.1:1080'], mgmt_host: '0.0.0.0', mgmt_port: 8000, cert_dir: './certs', policies_dir: './policies', logs_dir: './logs', categories_dir: './categories', log_blocks: true, log_requests: true, log_retention_days: 30, default_policy: null, auth_enabled: false, has_password: false, pac_proxy_host: '', pac_direct_hosts: [], pac_direct_ips: [], mgmt_hostname: 'web.filter', upstream_proxy: '', upstream_auth: '', ui_language: 'en', proxy_auth_enabled: false, proxy_auth_username: '', has_proxy_auth: false },
+        settings: { ml: { enabled: true, accel: 'auto', ort_lib_path: '', image_model: '', text_model: '', site_model: '', threads: 0, parallel: 0, max_image_px: 384, adult_score: 0.9, page_category_days: 30, data_dir: '', budget: { image_ms: 500, text_ms: 500, category_ms: 500 } }, proxy_listen: ['0.0.0.0:8080', 'socks5@127.0.0.1:1080'], mgmt_host: '0.0.0.0', mgmt_port: 8000, cert_dir: './certs', policies_dir: './policies', logs_dir: './logs', categories_dir: './categories', log_blocks: true, log_requests: true, log_retention_days: 30, default_policy: null, auth_enabled: false, has_password: false, pac_proxy_host: '', pac_direct_hosts: [], pac_direct_ips: [], mgmt_hostname: 'web.filter', upstream_proxy: '', upstream_auth: '', ui_language: 'en', proxy_auth_enabled: false, proxy_auth_username: '', has_proxy_auth: false },
         status: { proxy_port: null },
         newPassword: '',
         newProxyAuthPassword: '',

@@ -1,7 +1,9 @@
 package mgmtapi
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -17,6 +19,8 @@ type DecisionStore interface {
 	Override(kind, key string, adult bool, note string) error
 	// OverrideCategory pins a site's (or exact host's) category.
 	OverrideCategory(key, category, note string) error
+	// OverridePageCategory pins one page's category (key is its URL).
+	OverridePageCategory(url, category, note string) error
 	Delete(kind, key string) error
 	Clear(kind string, includeManual bool) error
 	Stats() any
@@ -77,6 +81,15 @@ func (s *Server) handleOverrideDecision(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusBadRequest, "kind and key are required")
 		return
 	}
+	if payload.Kind == "page_category" {
+		// Paths and queries are case-sensitive; PageKey lowercases the host.
+		if err := d.OverridePageCategory(strings.TrimSpace(payload.Key), sitecat.Normalize(payload.Category), payload.Note); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+		return
+	}
 	key := strings.ToLower(strings.TrimSpace(payload.Key))
 	if payload.Kind == "category" {
 		if err := d.OverrideCategory(key, sitecat.Normalize(payload.Category), payload.Note); err != nil {
@@ -98,7 +111,12 @@ func (s *Server) handleDeleteDecision(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := d.Delete(chi.URLParam(r, "kind"), chi.URLParam(r, "key")); err != nil {
+	kind, key, err := decisionPathKey(r.URL.EscapedPath())
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := d.Delete(kind, key); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -120,4 +138,22 @@ func (s *Server) handleClearDecisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "cleared"})
+}
+
+// decisionPathKey splits /api/decisions/{kind}/{key} from the escaped path
+// itself: a page key holds slashes and percent-escapes of its own, which
+// the router's already-decoded segments cannot be trusted to keep.
+func decisionPathKey(escaped string) (kind, key string, err error) {
+	rest := strings.TrimPrefix(escaped, "/api/decisions/")
+	k, v, ok := strings.Cut(rest, "/")
+	if !ok || k == "" || v == "" {
+		return "", "", fmt.Errorf("kind and key are required")
+	}
+	if kind, err = url.PathUnescape(k); err != nil {
+		return "", "", err
+	}
+	if key, err = url.PathUnescape(v); err != nil {
+		return "", "", err
+	}
+	return kind, key, nil
 }

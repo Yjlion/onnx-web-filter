@@ -16,6 +16,23 @@ func TestSiteKey(t *testing.T) {
 	}
 }
 
+func TestPageKey(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://Example.com":                           "example.com/",
+		"http://example.com:8080/a/b?x=1#frag":          "example.com/a/b?x=1",
+		"example.com/news":                              "example.com/news",
+		"https://example.com/p?b=2&utm_source=x&a=1":    "example.com/p?a=1&b=2",
+		"https://example.com/p?fbclid=abc&UTM_Medium=y": "example.com/p",
+		"https://example.com/caf%C3%A9":                 "example.com/caf%C3%A9",
+		"":                                              "",
+		"http://":                                       "",
+	} {
+		if got := PageKey(in); got != want {
+			t.Errorf("PageKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestNormalize(t *testing.T) {
 	for in, want := range map[string]string{
 		"Social Media": "social_media", "banking": "banking_finance", "news": "news",

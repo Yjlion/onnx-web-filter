@@ -100,6 +100,12 @@ request ──► decision cache (SQLite + in-memory LRU)  ──hit──► ac
   from the hostname on the first navigation and again with the page title
   when that answer was unsure (confidence below 0.6). Only navigations wait
   for it (`ml.budget.category_ms`).
+* **Page categories** are keyed by URL (host, path, query without tracking
+  parameters) and stored with a hash of the page's title, description and
+  text. The model is shown the host, the path's words, the title and
+  description, then the first 600 characters of text; a cached verdict is
+  reused while the hash matches and the page is judged again when it
+  changes. Rows older than `ml.page_category_days` (30) are pruned daily.
 * **Ad and tracker hosts** are judged by EasyList/EasyPrivacy only; no model
   is asked. Hosts can still be blocked by hand on the Decisions page.
 * **Prefetch**: when a page passes, the images it references are scored in
@@ -127,6 +133,7 @@ category examples. A cache hit takes microseconds.
 | `ml.parallel` | verdicts run at once; 0 picks 2 on a CPU and 4 with CUDA. |
 | `ml.threads` | threads per model session; 0 divides the cores by `ml.parallel`. |
 | `ml.max_image_px` | longest side images are reduced to before caching. |
+| `ml.page_category_days` | how long a page's category is kept before it is judged afresh (30). |
 
 ## Command line
 

@@ -1,0 +1,15 @@
+# url	title	text	expected slug - pages whose category is not their site's
+https://www.amazon.com/b?node=jobs	Amazon Jobs: Careers at Amazon	Search open positions in engineering, operations and retail. Apply online, see benefits, interview tips and hiring events near you.	jobs
+https://www.nytimes.com/wirecutter/reviews/best-blender/	The 4 Best Blenders of 2026	We tested 20 blenders to find the best one for smoothies and soups. Our pick costs $120; buy it at these retailers with today's discount.	shopping
+https://www.nytimes.com/games/wordle/index.html	Wordle - A daily word game	Guess the hidden word in 6 tries. Each guess must be a valid 5-letter word. Play today's puzzle and share your score with friends.	gaming
+https://www.reddit.com/r/learnpython/	r/learnpython	Subreddit for posting questions and asking for general advice about your Python code, homework and tutorials for beginners learning programming.	education
+https://www.youtube.com/channel/UCnews	BBC News - YouTube	Breaking news, world headlines, politics and elections coverage from BBC News reporters around the world, updated daily.	news
+https://www.paypal.com/us/webapps/mpp/jobs	Careers at PayPal	Join our team. Browse open jobs in engineering, product and design, read about our culture and benefits and apply today.	jobs
+https://www.bbc.com/sport/football	Football - BBC Sport	Premier League scores, fixtures, results and transfer news. Live match commentary, league tables and highlights.	sports
+https://www.bbc.com/food/recipes/lasagne	Easy lasagne recipe - BBC Food	Ingredients: minced beef, pasta sheets, tomato sauce, cheese. Method: layer the sauce and pasta, bake for 45 minutes and serve.	other
+https://medium.com/@dev/kubernetes-autoscaling-guide	A practical guide to Kubernetes autoscaling	Configure the horizontal pod autoscaler, set CPU and memory requests, tune cluster autoscaler and deploy with Helm charts.	technology
+https://www.google.com/travel/flights	Google Flights - Find Cheap Flights	Compare airfares from hundreds of airlines, track prices, find the cheapest dates to fly and book your trip.	travel
+https://github.com/sponsors	GitHub Sponsors	Invest in the open source projects you depend on. Sponsor developers and maintainers with monthly payments.	technology
+https://www.microsoft.com/en-us/store/b/xbox	Xbox consoles and games - Microsoft Store	Shop Xbox Series X, controllers and the latest video games. Play with Game Pass, multiplayer online and new releases.	gaming
+https://www.espn.com/espnplus/bet	ESPN BET Sportsbook	Place bets on NFL, NBA and soccer. Live odds, parlays, sportsbook promotions and a deposit bonus for new bettors.	gambling
+https://www.walmart.com/cp/pharmacy/	Walmart Pharmacy - Prescriptions & Refills	Refill prescriptions online, get vaccines, talk to a pharmacist about medication, symptoms and health conditions.	health
