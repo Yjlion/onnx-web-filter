@@ -3,6 +3,7 @@ package proxy
 import (
 	"net/http"
 
+	"github.com/yjlion/onnx-web-filter/internal/classify/textextract"
 	"github.com/yjlion/onnx-web-filter/internal/models"
 	"github.com/yjlion/onnx-web-filter/internal/proxy/state"
 )
@@ -63,6 +64,26 @@ type FlowContext struct {
 	// RulesApplied lists the ids of the natural-language rules the
 	// RuleEvaluator overlaid onto Policy for this flow (empty when none).
 	RulesApplied []string
+
+	// page caches Page's extraction of pageBody.
+	page     *textextract.Page
+	pageBody []byte
+}
+
+// Page returns the text extracted from ResponseBody (an HTML page),
+// parsing it once however many addons ask. A body replaced since the last
+// call is parsed again.
+func (fc *FlowContext) Page() textextract.Page {
+	if fc.page == nil || !sameBytes(fc.pageBody, fc.ResponseBody) {
+		p := textextract.Extract(fc.ResponseBody)
+		fc.page, fc.pageBody = &p, fc.ResponseBody
+	}
+	return *fc.page
+}
+
+// sameBytes reports whether a and b are the same slice (not merely equal).
+func sameBytes(a, b []byte) bool {
+	return len(a) == len(b) && (len(a) == 0 || &a[0] == &b[0])
 }
 
 // Frontend values for FlowContext.Frontend.

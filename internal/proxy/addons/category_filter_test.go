@@ -2,6 +2,8 @@ package addons_test
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
@@ -17,13 +19,28 @@ type fakeCategorizer struct {
 	known   map[string]string
 	timeout bool
 	down    bool
-	asked   []state.CategoryLookup
+	// pages answers page lookups that carry content; cached answers those
+	// without (the request phase: manual page overrides). Both by URL.
+	pages  map[string]string
+	cached map[string]string
+	asked  []state.CategoryLookup
 }
 
 func (f *fakeCategorizer) Categorize(_ context.Context, q state.CategoryLookup) state.CategoryAnswer {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.asked = append(f.asked, q)
+	if q.URL != "" {
+		if q.Title+q.Description+q.Text != "" {
+			if c, ok := f.pages[q.URL]; ok {
+				return state.CategoryAnswer{Scope: "page", Category: c, Known: true, Source: "model"}
+			}
+			return state.CategoryAnswer{Scope: "page", TimedOut: true}
+		}
+		if c, ok := f.cached[q.URL]; ok {
+			return state.CategoryAnswer{Scope: "page", Category: c, Known: true, Source: "model"}
+		}
+	}
 	if c, ok := f.known[q.Host]; ok {
 		return state.CategoryAnswer{Category: c, Known: true, Source: "model"}
 	}
@@ -143,5 +160,85 @@ func TestCategoryFilterAllowListWins(t *testing.T) {
 	addons.CategoryFilter{}.HandleRequest(fc)
 	if fc.Response != nil || len(cat.asked) != 0 {
 		t.Fatal("allow-listed URL was categorized or blocked")
+	}
+}
+
+// respond gives fc an HTML response, as the upstream fetch would.
+func respond(fc *proxy.FlowContext, status int, contentType, body string) {
+	fc.Response = &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{contentType}}}
+	fc.ResponseBody = []byte(body)
+}
+
+const newsPage = `<html><head><title>Election results</title></head><body><h1>Votes counted</h1><p>The results are in.</p></body></html>`
+
+func TestCategoryFilterPageVerdictWinsOverSite(t *testing.T) {
+	// The site is shopping (allowed); one of its pages is news (blocked).
+	cat := &fakeCategorizer{known: map[string]string{"shop.example": "shopping"},
+		pages: map[string]string{"http://shop.example/blog/vote": "news", "http://shop.example/": "shopping"}}
+	fc := categoryFlow(t, cat, "http://shop.example/blog/vote", true, blockList("news"))
+	addons.CategoryFilter{}.HandleRequest(fc)
+	if fc.Response != nil {
+		t.Fatal("request phase blocked an allowed site with no page verdict yet")
+	}
+	respond(fc, 200, "text/html; charset=utf-8", newsPage)
+	addons.CategoryFilter{}.HandleResponse(fc)
+	if fc.WFAction != "blocked" || !strings.Contains(string(fc.ResponseBody), "Page category") {
+		t.Fatalf("news page not blocked: %q", fc.WFAction)
+	}
+	last := cat.asked[len(cat.asked)-1]
+	if last.URL != "http://shop.example/blog/vote" || last.Title != "Election results" || !strings.Contains(last.Text, "Votes counted") ||
+		!strings.Contains(last.Text, "The results are in.") || last.Budget <= 0 {
+		t.Fatalf("page lookup = %+v", last)
+	}
+
+	// The shop's own home page passes.
+	fc = categoryFlow(t, cat, "http://shop.example/", true, blockList("news"))
+	addons.CategoryFilter{}.HandleRequest(fc)
+	respond(fc, 200, "text/html", `<title>Deals</title><p>buy</p>`)
+	addons.CategoryFilter{}.HandleResponse(fc)
+	if fc.WFAction == "blocked" {
+		t.Fatal("shopping page blocked")
+	}
+}
+
+func TestCategoryFilterRequestUsesPageOverride(t *testing.T) {
+	cat := &fakeCategorizer{known: map[string]string{"shop.example": "shopping"},
+		cached: map[string]string{"http://shop.example/blog/vote": "news"}}
+	fc := categoryFlow(t, cat, "http://shop.example/blog/vote", true, blockList("news"))
+	addons.CategoryFilter{}.HandleRequest(fc)
+	if fc.WFAction != "blocked" {
+		t.Fatal("page overridden to news not blocked before fetch")
+	}
+	// A sub-resource never asks about its page.
+	fc = categoryFlow(t, cat, "http://shop.example/blog/vote", false, blockList("news"))
+	addons.CategoryFilter{}.HandleRequest(fc)
+	if fc.Response != nil || cat.asked[len(cat.asked)-1].URL != "" {
+		t.Fatalf("sub-resource lookup = %+v", cat.asked[len(cat.asked)-1])
+	}
+}
+
+func TestCategoryFilterResponseSkips(t *testing.T) {
+	cfg := blockList("news")
+	cfg.OnTimeout = models.FallbackBlock
+	for name, setup := range map[string]func(fc *proxy.FlowContext){
+		// The model did not answer in time: the request phase's call stands.
+		"timeout":      func(fc *proxy.FlowContext) { respond(fc, 200, "text/html", newsPage) },
+		"not html":     func(fc *proxy.FlowContext) { respond(fc, 200, "application/json", `{}`) },
+		"error status": func(fc *proxy.FlowContext) { respond(fc, 404, "text/html", newsPage) },
+		"sub-resource": func(fc *proxy.FlowContext) {
+			fc.Request.Header.Set("Sec-Fetch-Dest", "iframe")
+			respond(fc, 200, "text/html", newsPage)
+		},
+	} {
+		cat := &fakeCategorizer{pages: map[string]string{}}
+		if name != "timeout" {
+			cat.pages["http://new.example/a"] = "news"
+		}
+		fc := categoryFlow(t, cat, "http://new.example/a", true, cfg)
+		setup(fc)
+		addons.CategoryFilter{}.HandleResponse(fc)
+		if fc.WFAction == "blocked" {
+			t.Errorf("%s: blocked", name)
+		}
 	}
 }

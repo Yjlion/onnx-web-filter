@@ -56,6 +56,11 @@ type MLConfig struct {
 	// learning a whole site as adult.
 	AdultScore float64 `json:"adult_score"`
 
+	// PageCategoryDays is how long a page's category verdict is kept
+	// before it is dropped and judged afresh on the next visit. Pages are
+	// numerous, so the cache would otherwise grow without bound.
+	PageCategoryDays int `json:"page_category_days"`
+
 	// Budget bounds how long a request waits for a verdict before the
 	// policy's on_timeout action applies. The job keeps running past the
 	// budget so its verdict still lands in the decision cache.
@@ -74,11 +79,12 @@ type MLBudget struct {
 // NewMLConfig returns the documented defaults.
 func NewMLConfig() MLConfig {
 	return MLConfig{
-		Enabled:    true,
-		Accel:      "auto",
-		MaxImagePx: 384,
-		AdultScore: 0.9,
-		Budget:     MLBudget{ImageMs: 500, TextMs: 500, CategoryMs: 500},
+		Enabled:          true,
+		Accel:            "auto",
+		MaxImagePx:       384,
+		AdultScore:       0.9,
+		PageCategoryDays: 30,
+		Budget:           MLBudget{ImageMs: 500, TextMs: 500, CategoryMs: 500},
 	}
 }
 
@@ -111,6 +117,9 @@ func (c *MLConfig) UnmarshalJSON(data []byte) error {
 	}
 	if c.AdultScore <= 0 || c.AdultScore > 1 {
 		c.AdultScore = 0.9
+	}
+	if c.PageCategoryDays <= 0 {
+		c.PageCategoryDays = 30
 	}
 	d := NewMLConfig().Budget
 	if c.Budget.ImageMs <= 0 {

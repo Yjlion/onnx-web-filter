@@ -65,8 +65,31 @@ func NewMLStack(ctx context.Context, cfg models.MLConfig) *MLStack {
 		QueueLimit: 64 * svc.Slots(),
 		MaxImagePx: cfg.MaxImagePx,
 	})
+	go prunePages(ctx, store, time.Duration(cfg.PageCategoryDays)*24*time.Hour)
 	pre := verdict.NewPrefetcher(vs, &http.Client{Transport: proxy.NewTransport(), Timeout: 20 * time.Second}, 2)
 	return &MLStack{Svc: svc, Verdicts: vs, Store: store, Prefetch: pre, maxPx: cfg.MaxImagePx}
+}
+
+// prunePages drops page categories older than keep, now and daily until ctx
+// ends, so the cache holds the pages people still visit.
+func prunePages(ctx context.Context, store *verdict.Store, keep time.Duration) {
+	if keep <= 0 {
+		return
+	}
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		if n, err := store.Prune(verdict.KindPage, time.Now().Add(-keep)); err != nil {
+			slog.Warn("verdict: pruning page categories failed", "err", err)
+		} else if n > 0 {
+			slog.Info("verdict: pruned old page categories", "rows", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // Close stops the verdict workers and the models.
@@ -137,11 +160,24 @@ func (b *onnxBackend) Site(ctx context.Context, host, title, description string)
 	if err != nil {
 		return verdict.Result{}, err
 	}
+	return siteResult(sc), nil
+}
+
+func (b *onnxBackend) Page(ctx context.Context, url, title, description, text string) (verdict.Result, error) {
+	sc, err := b.svc.Page(ctx, url, title, description, text)
+	if err != nil {
+		return verdict.Result{}, err
+	}
+	return siteResult(sc), nil
+}
+
+// siteResult names the top three categories in Detail, e.g. "news 0.61, ...".
+func siteResult(sc classify.SiteScores) verdict.Result {
 	var parts []string
 	for _, r := range sc.Ranked[:min(3, len(sc.Ranked))] {
 		parts = append(parts, fmt.Sprintf("%s %.2f", r.Slug, r.Probability))
 	}
-	return verdict.Result{Category: sc.Category, Confidence: sc.Confidence, Detail: strings.Join(parts, ", ")}, nil
+	return verdict.Result{Category: sc.Category, Confidence: sc.Confidence, Detail: strings.Join(parts, ", ")}
 }
 
 // describe lists the most probable labels, e.g. "porn 0.82, sexy 0.10".
@@ -174,11 +210,24 @@ func NewSiteCategorizer(vs *verdict.Service, lists sitecat.ListMatcher) state.Si
 }
 
 func (c *siteCategorizer) Categorize(ctx context.Context, q state.CategoryLookup) state.CategoryAnswer {
-	a := c.vs.Category(ctx, verdict.CategoryRequest{
+	if q.URL != "" {
+		if strings.TrimSpace(q.Title+q.Description+q.Text) != "" {
+			return categoryAnswer("page", c.vs.PageCategory(ctx, verdict.PageCategoryRequest{
+				URL: q.URL, Title: q.Title, Description: q.Description, Text: q.Text, Budget: q.Budget,
+			}))
+		}
+		if a := c.vs.CachedPageCategory(q.URL); a.Known && a.Category != "" && (q.Cached || a.Source == verdict.SourceManual) {
+			return categoryAnswer("page", a)
+		}
+	}
+	return categoryAnswer("site", c.vs.Category(ctx, verdict.CategoryRequest{
 		Host: q.Host, ListCategory: sitecat.FromLists(c.lists, sitecat.HostOf(q.Host)),
 		Title: q.Title, Description: q.Description, Enqueue: q.Enqueue, Budget: q.Budget,
-	})
-	return state.CategoryAnswer{Category: a.Category, Source: string(a.Source), Confidence: a.Confidence,
+	}))
+}
+
+func categoryAnswer(scope string, a verdict.Answer) state.CategoryAnswer {
+	return state.CategoryAnswer{Scope: scope, Category: a.Category, Source: string(a.Source), Confidence: a.Confidence,
 		Known: a.Known && a.Category != "", TimedOut: a.TimedOut, Unavailable: a.Unavailable}
 }
 
@@ -305,6 +354,9 @@ func (d *decisions) Override(kind, key string, adult bool, note string) error {
 }
 func (d *decisions) OverrideCategory(key, category, note string) error {
 	return d.vs.OverrideCategory(key, category, note)
+}
+func (d *decisions) OverridePageCategory(url, category, note string) error {
+	return d.vs.OverridePageCategory(url, category, note)
 }
 func (d *decisions) Delete(kind, key string) error {
 	return d.vs.Store().Delete(verdict.Kind(kind), key)

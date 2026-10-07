@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/url"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // Prototype is one category and the texts that describe it.
@@ -88,10 +90,44 @@ func QueryText(host, title, description string) string {
 	return strings.Join(parts, " ")
 }
 
+// PageQueryText is what one page looks like to the embedder: its site's
+// query text with the URL path's words after the host, then the start of
+// the page's visible text. The host, title and description lead so the
+// category prototypes still match; the model reads 256 tokens.
+func PageQueryText(rawURL, title, description, text string) string {
+	host := rawURL
+	if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
+		host = u.Hostname()
+		if words := strings.Join(strings.FieldsFunc(u.Path, func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		}), " "); words != "" {
+			host += " " + words
+		}
+	}
+	q := QueryText(host, title, description)
+	if t := strings.Join(strings.Fields(text), " "); t != "" {
+		if r := []rune(t); len(r) > 600 {
+			t = string(r[:600])
+		}
+		q += " " + t
+	}
+	return q
+}
+
 // Classify ranks the categories for a site. title and description may be
 // empty; the host alone is usually enough for well-known sites.
 func (c *SiteClassifier) Classify(ctx context.Context, host, title, description string) (SiteScores, error) {
-	v, err := c.emb.Embed(ctx, []string{QueryText(host, title, description)})
+	return c.ClassifyQuery(ctx, QueryText(host, title, description))
+}
+
+// ClassifyPage ranks the categories for one page from its URL and content.
+func (c *SiteClassifier) ClassifyPage(ctx context.Context, rawURL, title, description, text string) (SiteScores, error) {
+	return c.ClassifyQuery(ctx, PageQueryText(rawURL, title, description, text))
+}
+
+// ClassifyQuery ranks the categories for an already assembled query text.
+func (c *SiteClassifier) ClassifyQuery(ctx context.Context, query string) (SiteScores, error) {
+	v, err := c.emb.Embed(ctx, []string{query})
 	if err != nil {
 		return SiteScores{}, err
 	}

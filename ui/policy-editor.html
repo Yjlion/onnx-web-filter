@@ -337,9 +337,9 @@
               </div>
             </div>
             <div class="border-t border-gray-100 pt-3">
-              <label class="text-xs font-medium text-gray-700 block mb-1">Test a site</label>
+              <label class="text-xs font-medium text-gray-700 block mb-1">Test a site or page URL</label>
               <div class="flex gap-2">
-                <input type="text" x-model="catTest.host" @keydown.enter.prevent="testSiteCategory()" placeholder="www.example.com"
+                <input type="text" x-model="catTest.host" @keydown.enter.prevent="testSiteCategory()" placeholder="www.example.com or https://www.example.com/page"
                        class="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-mono" />
                 <button type="button" @click="testSiteCategory()" :disabled="catTest.busy"
                         class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">Look up</button>
@@ -1019,7 +1019,7 @@
             const listed = cf.categories.includes(b.category);
             const blocked = cf.mode === 'whitelist' ? (b.category !== 'infrastructure' && !listed) : listed;
             this.catTest.blocked = cf.enabled && blocked;
-            this.catTest.result = `${b.site}: ${b.label} (${b.source}${b.source === 'model' ? ', confidence ' + Math.round(b.confidence * 100) + '%' : ''}) → ` +
+            this.catTest.result = `${b.scope === 'page' ? b.page : b.site}: ${b.label} (${b.source}${b.source === 'model' ? ', confidence ' + Math.round(b.confidence * 100) + '%' : ''}) → ` +
               (blocked ? 'blocked by this policy' : 'allowed by this policy') + (cf.enabled ? '' : ' once enabled');
           } catch (e) {
             this.catTest.result = 'Lookup failed';

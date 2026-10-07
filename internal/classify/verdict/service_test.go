@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -62,6 +63,15 @@ func (f *fakeBackend) Site(ctx context.Context, host, title, desc string) (Resul
 		return Result{Category: "news", Confidence: 0.9}, nil
 	}
 	return Result{Category: "shopping", Confidence: 0.5}, nil
+}
+
+func (f *fakeBackend) Page(ctx context.Context, url, title, desc, text string) (Result, error) {
+	f.calls.Add(1)
+	time.Sleep(f.delay)
+	if strings.Contains(text, "election") {
+		return Result{Category: "news", Confidence: 0.8, Detail: "news 0.80"}, nil
+	}
+	return Result{Category: "shopping", Confidence: 0.8, Detail: "shopping 0.80"}, nil
 }
 
 func newTestService(t *testing.T, b *fakeBackend) *Service {

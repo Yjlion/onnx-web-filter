@@ -43,7 +43,23 @@ infrastructure (CDNs, APIs, login and asset servers), other.
   then the installed domain lists (`webfilter categories update`; porn,
   gambling, shopping, social, streaming and the other IPFire lists map onto
   the categories above), then the model's cached verdict, then the model.
-  Verdicts are cached per registrable domain.
+  Site verdicts are cached per registrable domain.
+* **Every page is categorized too.** When a navigation's HTML arrives, the
+  model reads the page itself (URL path, title, description, headings and
+  the start of its text) and the page's category wins over its site's, lists
+  included: a news article on a shopping site is news, and is blocked if
+  news is. A site whose own category is blocked is still refused before
+  anything is fetched; page verdicts only add blocks on allowed sites.
+  Page verdicts are cached per URL (host, path and query, minus tracking
+  parameters such as `utm_*` and `fbclid`) together with a hash of the
+  content they were judged from. Every load of a page is checked against
+  it: unchanged content is a cache hit, changed content is judged again on
+  that same load, so a blocked page that changes to an allowed category is
+  let through. If the model does not answer within the budget the site's
+  category stands for that load. Page verdicts not refreshed for
+  `ml.page_category_days` (30) days are dropped. A manual override for the
+  page (applied before the fetch), its host or its site wins over the page
+  verdict.
 * Only a page navigation asks the model and waits for it, up to
   `budget_ms` (or `ml.budget.category_ms`, 500 ms). If it has not decided
   by then the page gets `on_timeout` and the category is ready for the next
@@ -57,9 +73,10 @@ infrastructure (CDNs, APIs, login and asset servers), other.
   opens, and categorized in the background for next time. Only
   `blacklist` mode is enforced there.
 * The URL allow list wins over categories; the block list is checked first.
-* The policy editor's **Site Categories** section has *Test a site*; the
-  **Decisions** page lists every cached category (filter *Site
-  categories*) and lets you set one by hand for a domain or an exact host.
+* The policy editor's **Site Categories** section has *Test a site*, which
+  also takes a page URL; the **Decisions** page lists every cached category
+  (filters *Site categories* and *Page categories*) and lets you set one by
+  hand for a domain, an exact host or one page URL.
 
 `url_filter.categories` still selects raw domain lists by name, as before.
 

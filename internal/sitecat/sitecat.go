@@ -7,6 +7,7 @@ package sitecat
 
 import (
 	"net"
+	"net/url"
 	"strings"
 
 	"golang.org/x/net/publicsuffix"
@@ -187,6 +188,54 @@ func HostOf(urlOrHost string) string {
 		s = h
 	}
 	return strings.ToLower(strings.TrimSuffix(s, "."))
+}
+
+// PageKey reduces a URL to the key page categories are cached under: the
+// host (as HostOf gives it), the path, and the query with tracking
+// parameters removed and the rest sorted. Scheme and fragment are dropped,
+// so http and https share a verdict. It returns "" for an unparsable URL.
+func PageKey(rawURL string) string {
+	s := strings.TrimSpace(rawURL)
+	if s == "" {
+		return ""
+	}
+	if !strings.Contains(s, "://") {
+		s = "http://" + s
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return ""
+	}
+	host := HostOf(u.Host)
+	if host == "" {
+		return ""
+	}
+	path := u.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+	q := u.Query()
+	for k := range q {
+		if isTrackingParam(k) {
+			q.Del(k)
+		}
+	}
+	if enc := q.Encode(); enc != "" {
+		return host + path + "?" + enc
+	}
+	return host + path
+}
+
+// trackingParams are query parameters that identify a click or campaign,
+// never the content.
+var trackingParams = map[string]bool{
+	"fbclid": true, "gclid": true, "dclid": true, "gbraid": true, "wbraid": true, "msclkid": true,
+	"yclid": true, "igshid": true, "mc_cid": true, "mc_eid": true, "_ga": true, "_gl": true,
+}
+
+func isTrackingParam(k string) bool {
+	k = strings.ToLower(k)
+	return trackingParams[k] || strings.HasPrefix(k, "utm_")
 }
 
 // Contains reports whether slug is in list.
